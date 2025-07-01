@@ -1,8 +1,7 @@
 <script>
-	import { onMount } from 'svelte';
-	import { userRole, userDepartment, userName } from '$lib/services/firebaseConfig';
-
 	let showLogoutModal = false;
+	export let employee = null;
+
 
 	function openLogoutModal() {
 		showLogoutModal = true;
@@ -36,7 +35,8 @@
 </svelte:head>
 
 <header
-	class="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 flex items-center justify-between"
+	class="text-white py-4 px-6 flex items-center justify-between"
+	style="background-color: #4CAF50;"
 >
 	<!-- Judul -->
 	<div class="text-xl font-bold">
@@ -59,8 +59,8 @@
 				</div>
 				<!-- User Details -->
 				<div class="text-center leading-tight">
-					<div class="text-sm font-medium">{$userName}</div>
-					<div class="text-xs opacity-70">{$userDepartment}</div>
+					<div class="text-sm font-medium">{employee?.nama_karyawan || '-'}</div>
+					<div class="text-xs opacity-70">{employee?.divisi || '-'}</div>
 				</div>
 				<!-- Logout Icon -->
 				<div class="relative">
