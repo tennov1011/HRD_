@@ -55,7 +55,7 @@ export const actions = {
 		});
 
 		// Redirect ke dashboard setelah login berhasil
-		throw redirect(302, '/dashboard');
+		throw redirect(302, '/admin');
 	}
 };
 
