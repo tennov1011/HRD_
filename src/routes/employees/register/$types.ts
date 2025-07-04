@@ -1,0 +1,71 @@
+// Definisi untuk ActionData yang dikembalikan oleh form action
+
+export interface ActionData {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  errors?: {
+    nama_lengkap?: string;
+    no_karyawan?: string;
+    tanggal_masuk?: string;
+    status_kerja?: string;
+    divisi?: string;
+    posisi_jabatan?: string;
+    penggajian?: string;
+    no_rekening_bank?: string;
+    nama_bank?: string;
+    email?: string;
+    no_telp?: string;
+    kelamin?: string;
+    tempat_tanggal_lahir?: string;
+    umur?: string;
+    agama?: string;
+    status_hubungan?: string;
+    tanggungan?: string;
+    kontak_darurat?: string;
+    nip?: string;
+    no_ktp?: string;
+    no_kk?: string;
+    no_npwp?: string;
+    no_bpjs?: string;
+    faskes_tingkat_1?: string;
+    pendidikan_terakhir?: string;
+    alamat_ktp?: string;
+    alamat_domisili?: string;
+    asal_kota?: string;
+    lokasi_absen?: string;
+    foto_ktp?: string;
+  };
+  values?: {
+    nama_lengkap?: string;
+    no_karyawan?: string;
+    tanggal_masuk?: string;
+    status_kerja?: string;
+    divisi?: string;
+    posisi_jabatan?: string;
+    penggajian?: string;
+    no_rekening_bank?: string;
+    nama_bank?: string;
+    email?: string;
+    no_telp?: string;
+    kelamin?: string;
+    tempat_tanggal_lahir?: string;
+    umur?: string;
+    agama?: string;
+    status_hubungan?: string;
+    tanggungan?: string;
+    kontak_darurat?: string;
+    nip?: string;
+    no_ktp?: string;
+    no_kk?: string;
+    no_npwp?: string;
+    no_bpjs?: string;
+    faskes_tingkat_1?: string;
+    pendidikan_terakhir?: string;
+    alamat_ktp?: string;
+    alamat_domisili?: string;
+    asal_kota?: string;
+    lokasi_absen?: string;
+    foto_ktp?: string;
+  };
+}
