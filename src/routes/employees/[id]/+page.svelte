@@ -410,7 +410,6 @@
 								</div>
 								<h3 class="text-2xl font-bold text-gray-900">Informasi Personal</h3>
 							</div>
-qq111111111111111111111111111111111111111
 							<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 								<div class="space-y-4">
 									<div class="group">
