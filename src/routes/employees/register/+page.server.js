@@ -5,6 +5,81 @@ import {
   VITE_FIREBASE_API_KEY
 } from '$env/static/private';
 
+// Load function untuk mengambil data master_data
+export async function load() {
+  try {
+    const directusUrl = VITE_DIRECTUS_URL || 'https://directus.eltamaprimaindo.com';
+    const directusToken = VITE_DIRECTUS_TOKEN || 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
+    
+    // Fetch master_data dari Directus
+    const response = await fetch(`${directusUrl}/items/master_data?limit=-1`, {
+      headers: {
+        'Authorization': `Bearer ${directusToken}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch master_data:', response.status, response.statusText);
+      return {
+        masterData: {
+          divisi: [],
+          jabatan: [],
+          lokasi_absen: []
+        }
+      };
+    }
+
+    const result = await response.json();
+    const allMasterData = result.data || [];
+
+    // Filter dan format data sesuai kebutuhan (tanpa shift)
+    const masterData = {
+      divisi: allMasterData
+        .filter(item => item.category === 'divisi' && item.status === 'aktif')
+        .map(item => ({
+          value: item.nama,
+          label: item.nama,
+          id: item.id
+        })),
+      jabatan: allMasterData
+        .filter(item => item.category === 'jabatan' && item.status === 'aktif')
+        .map(item => ({
+          value: item.nama,
+          label: item.nama,
+          id: item.id
+        })),
+      lokasi_absen: allMasterData
+        .filter(item => item.category === 'lokasi_absen' && item.status === 'aktif')
+        .map(item => ({
+          value: item.nama,
+          label: item.nama,
+          id: item.id,
+          alamat: item.alamat || ''
+        }))
+    };
+
+    console.log('Master data loaded:', {
+      divisi: masterData.divisi.length,
+      jabatan: masterData.jabatan.length,
+      lokasi_absen: masterData.lokasi_absen.length
+    });
+
+    return {
+      masterData
+    };
+
+  } catch (error) {
+    console.error('Error loading master_data:', error);
+    return {
+      masterData: {
+        divisi: [],
+        jabatan: [],
+        lokasi_absen: []
+      }
+    };
+  }
+}
+
 export const actions = {
   default: async ({ request }) => {
     // Validasi environment variables

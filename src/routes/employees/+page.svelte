@@ -31,20 +31,8 @@
   // Loading state
   let isLoading = false;
   
-  // Computed filtered employees dengan debugging yang lebih detail
+  // Computed filtered employees
   $: filteredEmployees = employees.filter(employee => {
-    // Debug setiap employee yang difilter
-    if (searchQuery.trim()) {
-      console.log('=== DEBUGGING SEARCH FOR:', searchQuery.trim(), '===');
-      console.log('Employee:', {
-        id: employee.id,
-        nama_lengkap: employee.nama_lengkap,
-        no_karyawan: employee.no_karyawan,
-        nama_lower: employee.nama_lengkap?.toLowerCase?.(),
-        search_term: searchQuery.toLowerCase().trim()
-      });
-    }
-    
     // Jika tidak ada search query, hanya filter berdasarkan divisi dan status
     if (!searchQuery.trim()) {
       // Normalisasi divisi untuk perbandingan
@@ -58,28 +46,15 @@
       return matchesDivisi && matchesStatus;
     }
     
-    // Search logic - fokus pada nama dan nomor karyawan dengan handling yang lebih robust
+    // Search logic - fokus pada nama dan nomor karyawan
     const searchTerm = searchQuery.toLowerCase().trim();
-    const namaLengkap = String(employee.nama_lengkap || '').toLowerCase().trim();
-    const noKaryawan = String(employee.no_karyawan || '').toLowerCase().trim();
-    const employeeId = String(employee.id || '').toLowerCase().trim();
+    const namaLengkap = (employee.nama_lengkap || '').toLowerCase().trim();
+    const noKaryawan = (employee.no_karyawan || '').toLowerCase().trim();
+    const employeeId = (employee.id || '').toLowerCase().trim();
     
-    // Debug matching
-    const namaMatch = namaLengkap.includes(searchTerm);
-    const noMatch = noKaryawan.includes(searchTerm);
-    const idMatch = employeeId.includes(searchTerm);
-    
-    if (searchQuery.trim()) {
-      console.log('Search matches:', {
-        namaMatch,
-        noMatch,
-        idMatch,
-        namaLengkap,
-        searchTerm
-      });
-    }
-    
-    const matchesSearch = namaMatch || noMatch || idMatch;
+    const matchesSearch = namaLengkap.includes(searchTerm) || 
+                         noKaryawan.includes(searchTerm) || 
+                         employeeId.includes(searchTerm);
     
     // Jika search tidak cocok, return false
     if (!matchesSearch) return false;
