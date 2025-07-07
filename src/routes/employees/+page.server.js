@@ -29,9 +29,10 @@ export async function load() {
       'nama_lengkap',
       'no_karyawan', 
       'divisi',
-      'posisi_jabatan',
+      'jabatan',
       'status_kerja',
-      'lokasi_absen'
+      'lokasi_absen',
+      'shift'
     ].join(',');
     
     const requestUrl = `${directusUrl}/items/register?fields=${fields}&limit=1000&sort=nama_lengkap`;

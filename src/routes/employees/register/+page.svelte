@@ -5,6 +5,7 @@
 	import { writable } from 'svelte/store';
 
 	export let form: ActionData;
+	export let data: any; // Data master dari server
 
 	// Notification store
 	const notification = writable({ show: false, type: '', message: '' });
@@ -23,7 +24,7 @@
 	let no_ktp = '';
 	let status_kerja = '';
 	let tanggal_masuk = '';
-	let posisi_jabatan = '';
+	let jabatan = '';
 	let agama = '';
 	let status_hubungan = '';
 	let kontak_darurat = '';
@@ -42,38 +43,14 @@
 		{ value: 'freelance', label: 'Freelance' }
 	];
 
-	// Pilihan divisi
-	const divisiOptions = [
-		{ value: 'hrd', label: 'Human Resources' },
-		{ value: 'finance', label: 'Finance' },
-		{ value: 'marketing', label: 'Marketing' },
-		{ value: 'it', label: 'Information Technology' },
-		{ value: 'operations', label: 'Operations' },
-		{ value: 'sales', label: 'Sales' },
-		{ value: 'production', label: 'Production' },
-		{ value: 'quality_control', label: 'Quality Control' }
-	];
+	// Pilihan divisi - dari database master_data
+	$: divisiOptions = data?.masterData?.divisi 
 
-	// Pilihan posisi jabatan
-	const posisiJabatanOptions = [
-		{ value: 'staff', label: 'Staff' },
-		{ value: 'supervisor', label: 'Supervisor' },
-		{ value: 'manager', label: 'Manager' },
-		{ value: 'senior_manager', label: 'Senior Manager' },
-		{ value: 'director', label: 'Director' },
-		{ value: 'gm', label: 'General Manager' },
-		{ value: 'ceo', label: 'CEO' }
-	];
+	// Pilihan posisi jabatan - dari database master_data
+	$: posisiJabatanOptions = data?.masterData?.jabatan
 
-	// Pilihan lokasi absen
-	const lokasiAbsenOptions = [
-		{ value: 'kantor_pusat', label: 'Kantor Pusat' },
-		{ value: 'cabang_jakarta', label: 'Cabang Jakarta' },
-		{ value: 'cabang_bandung', label: 'Cabang Bandung' },
-		{ value: 'cabang_surabaya', label: 'Cabang Surabaya' },
-		{ value: 'cabang_medan', label: 'Cabang Medan' },
-		{ value: 'remote', label: 'Remote/WFH' }
-	];
+	// Pilihan lokasi absen - dari database master_data
+	$: lokasiAbsenOptions = data?.masterData?.lokasi_absen 
 
 	// Pilihan status hubungan
 	const statusHubunganOptions = [
@@ -115,7 +92,7 @@
 		no_ktp = form.values.no_ktp || '';
 		status_kerja = form.values.status_kerja || '';
 		tanggal_masuk = form.values.tanggal_masuk || '';
-		posisi_jabatan = form.values.posisi_jabatan || '';
+		jabatan = form.values.jabatan || '';
 		agama = form.values.agama || '';
 		status_hubungan = form.values.status_hubungan || '';
 		kontak_darurat = form.values.kontak_darurat || '';
@@ -134,7 +111,7 @@
 		no_ktp = '';
 		status_kerja = '';
 		tanggal_masuk = '';
-		posisi_jabatan = '';
+		jabatan = '';
 		agama = '';
 		status_hubungan = '';
 		kontak_darurat = '';
@@ -472,7 +449,7 @@
 						<!-- 6. Posisi Jabatan -->
 						<div>
 							<label
-								for="posisi_jabatan"
+								for="jabatan"
 								class="mb-2 flex items-center text-sm font-medium text-gray-700"
 							>
 								<svg
@@ -488,23 +465,23 @@
 										d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
 									/>
 								</svg>
-								Posisi Jabatan <span class="text-red-500">*</span>
+								 Jabatan <span class="text-red-500">*</span>
 							</label>
 							<select
-								id="posisi_jabatan"
-								name="posisi_jabatan"
-								bind:value={posisi_jabatan}
+								id="jabatan"
+								name="jabatan"
+								bind:value={jabatan}
 								class="w-full rounded-lg border border-gray-300 px-4 py-3 transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-								class:border-red-500={form?.errors?.posisi_jabatan}
+								class:border-red-500={form?.errors?.jabatan}
 								required
 							>
-								<option value="">Pilih Posisi Jabatan</option>
+								<option value="">Pilih Jabatan</option>
 								{#each posisiJabatanOptions as option}
 									<option value={option.value}>{option.label}</option>
 								{/each}
 							</select>
-							{#if form?.errors?.posisi_jabatan}
-								<p class="mt-1 text-sm text-red-600">{form.errors.posisi_jabatan}</p>
+							{#if form?.errors?.jabatan}
+								<p class="mt-1 text-sm text-red-600">{form.errors.jabatan}</p>
 							{/if}
 						</div>
 

@@ -32,9 +32,19 @@ export async function load({ params }) {
       }
     });
     
+    console.log('Response Status:', response.status);
+    console.log('Response Headers:', Object.fromEntries(response.headers.entries()));
+    
     if (response.ok) {
       const data = await response.json();
+      console.log('Employee Data:', data);
+      
       const employee = data.data;
+      
+      // Validasi apakah employee data ada
+      if (!employee) {
+        throw error(404, `Data karyawan dengan ID ${id} tidak ditemukan`);
+      }
       
       // Ambil informasi akun karyawan jika ada
       let accountInfo = null;
@@ -58,18 +68,21 @@ export async function load({ params }) {
         // Tidak perlu throw error, cukup log saja
       }
       
-      // Untuk request langsung ke ID, response berupa object tunggal
       return {
         employee: employee,
         accountInfo: accountInfo,
         error: null
       };
     } else {
-      console.error('Error response:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('Error response:', response.status, response.statusText, errorText);
+      
       if (response.status === 404) {
         throw error(404, `Karyawan dengan ID ${id} tidak ditemukan`);
+      } else if (response.status === 403) {
+        throw error(403, 'Akses ditolak - periksa token authorization');
       }
-      throw error(response.status, 'Gagal mengambil data karyawan');
+      throw error(response.status, `Gagal mengambil data karyawan: ${errorText}`);
     }
   } catch (err) {
     console.error('Error fetching employee detail:', err);

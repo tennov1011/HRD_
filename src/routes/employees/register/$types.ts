@@ -10,7 +10,7 @@ export interface ActionData {
     tanggal_masuk?: string;
     status_kerja?: string;
     divisi?: string;
-    posisi_jabatan?: string;
+    jabatan?: string;
     penggajian?: string;
     no_rekening_bank?: string;
     nama_bank?: string;
@@ -42,7 +42,7 @@ export interface ActionData {
     tanggal_masuk?: string;
     status_kerja?: string;
     divisi?: string;
-    posisi_jabatan?: string;
+    jabatan?: string;
     penggajian?: string;
     no_rekening_bank?: string;
     nama_bank?: string;

@@ -42,7 +42,17 @@
 				{ label: 'Pengajuan Kasbon', href: '/request/advance', icon: '💵' }
 			]
 		},
-		{ label: 'Cuti', href: '/leave', icon: '📅' },
+		{
+			label: 'Master Data',
+			icon: '📂',
+			hasDropdown: true,
+			subMenus: [
+				{ label: 'Shift Kerja', href: '/masterdata/shift', icon: '⏰' },
+				{ label: 'Divisi', href: '/masterdata/divisi', icon: '🏢' },
+				{ label: 'Jabatan', href: '/masterdata/jabatan', icon: '👔' },
+				{ label: 'Lokasi Presensi', href: '/masterdata/lokasi-absen', icon: '📍' }
+			]
+		},
 		{ label: 'Bonus', href: '/bonuses', icon: '💰' },
 		{ label: 'Rekrutmen', href: '/recruitment', icon: '👔' },
 		{ label: 'Dokumen', href: '/documents', icon: '📄' },
@@ -153,17 +163,6 @@
 			{/each}
 		</ul>
 	</nav>
-
-	<!-- Footer -->
-	<div class="sidebar-footer">
-		<div class="user-info">
-			<div class="user-avatar">👤</div>
-			<div class="user-details">
-				<p class="user-name">Admin User</p>
-				<p class="user-email">admin@hrd.com</p>
-			</div>
-		</div>
-	</div>
 </aside>
 
 <style>

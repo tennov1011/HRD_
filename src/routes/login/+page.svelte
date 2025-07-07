@@ -2,10 +2,39 @@
 <script>
 	import { enhance } from '$app/forms';
 	import Footer from '$lib/component/Footer.svelte';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
 
 	export let form;
-
 	let loading = false;
+
+	// Handle successful login redirect
+	$: if (form?.success && form?.redirect) {
+		// Redirect to dashboard instead of admin
+		const redirectPath = form.redirect === '/admin' ? '/dashboard' : form.redirect;
+		goto(redirectPath);
+	}
+
+	onMount(() => {
+		if (browser) {
+			// Clear localStorage
+			localStorage.clear();
+
+			// Clear sessionStorage
+			sessionStorage.clear();
+
+			// Clear cookies
+			document.cookie.split(';').forEach(function (c) {
+				document.cookie = c
+					.replace(/^ +/, '')
+					.replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+			});
+
+			// Prevent back navigation to protected pages
+			window.history.replaceState(null, '', '/login');
+		}
+	});
 </script>
 
 <svelte:head>
@@ -17,16 +46,18 @@
 </svelte:head>
 
 <div
-	class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8"
+	class="flex min-h-screen items-center justify-center px-4 sm:px-6 lg:px-8"
 	style="background: linear-gradient(135deg, #4CAF50 0%, #81C784 50%, #A5D6A7 100%);"
 >
-	<div class="fixed top-16 left-1/2 transform -translate-x-1/2 z-50 flex justify-center">
+	<div class="fixed top-16 left-1/2 z-50 flex -translate-x-1/2 transform justify-center">
 		<h1 class="typewriter text-6xl font-extrabold text-white drop-shadow-lg">Eltama Prima Indo</h1>
 	</div>
-	<div class="max-w-md w-full space-y-8 mt-16">
+	<div class="mt-16 w-full max-w-md space-y-8">
 		<!-- Header -->
 		<div class="text-center">
-			<div class="mx-auto h-16 w-16 bg-white bg-opacity-20 backdrop-blur-sm rounded-full flex items-center justify-center mb-6 shadow-lg border border-white border-opacity-30">
+			<div
+				class="bg-opacity-20 border-opacity-30 mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-white bg-white shadow-lg backdrop-blur-sm"
+			>
 				<svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
 						stroke-linecap="round"
@@ -37,25 +68,39 @@
 				</svg>
 			</div>
 			<h2 class="text-3xl font-bold text-white drop-shadow-md">Login ke Sistem</h2>
-			<p class="mt-2 text-sm text-white text-opacity-90">HRD Management System</p>
+			<p class="text-opacity-90 mt-2 text-sm text-white">HRD Management System</p>
 		</div>
 
 		<!-- Login Form -->
-		<div class="bg-white bg-opacity-95 backdrop-blur-sm py-8 px-6 shadow-2xl rounded-2xl border border-white border-opacity-30">
-			<form 
-				method="POST" 
-				class="space-y-6" 
+		<div
+			class="bg-opacity-95 border-opacity-30 rounded-2xl border border-white bg-white px-6 py-8 shadow-2xl backdrop-blur-sm"
+		>
+			<form
+				method="POST"
+				class="space-y-6"
 				use:enhance={() => {
 					loading = true;
-					return async ({ update }) => {
-						await update();
+					return async ({ result, update }) => {
 						loading = false;
+						
+						if (result.type === 'success') {
+							// Force redirect to dashboard instead of admin
+							setTimeout(() => {
+								goto('/dashboard');
+							}, 100);
+						} else if (result.type === 'redirect') {
+							// Intercept redirect and change to dashboard
+							const redirectPath = result.location === '/admin' ? '/dashboard' : result.location;
+							goto(redirectPath);
+						} else {
+							await update();
+						}
 					};
 				}}
 			>
 				<!-- Error Message -->
 				{#if form?.error}
-					<div class="bg-red-50 border-l-4 border-red-400 p-4 rounded-r-lg">
+					<div class="rounded-r-lg border-l-4 border-red-400 bg-red-50 p-4">
 						<div class="flex">
 							<div class="flex-shrink-0">
 								<svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -75,11 +120,11 @@
 
 				<!-- Email Field -->
 				<div>
-					<label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+					<label for="email" class="mb-2 block text-sm font-medium text-gray-700">
 						Email Address
 					</label>
 					<div class="relative">
-						<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
 							<svg
 								class="h-5 w-5 text-gray-400"
 								fill="none"
@@ -102,7 +147,7 @@
 							required
 							value={form?.email || ''}
 							disabled={loading}
-							class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+							class="block w-full rounded-lg border border-gray-300 py-3 pr-3 pl-10 text-gray-900 placeholder-gray-500 transition-colors focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
 							placeholder="nama@eltama.com"
 						/>
 					</div>
@@ -110,11 +155,11 @@
 
 				<!-- Password Field -->
 				<div>
-					<label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+					<label for="password" class="mb-2 block text-sm font-medium text-gray-700">
 						Password
 					</label>
 					<div class="relative">
-						<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
 							<svg
 								class="h-5 w-5 text-gray-400"
 								fill="none"
@@ -136,7 +181,7 @@
 							autocomplete="current-password"
 							required
 							disabled={loading}
-							class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+							class="block w-full rounded-lg border border-gray-300 py-3 pr-3 pl-10 text-gray-900 placeholder-gray-500 transition-colors focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
 							placeholder="Masukkan password"
 						/>
 					</div>
@@ -147,11 +192,11 @@
 					<button
 						type="submit"
 						disabled={loading}
-						class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors"
+						class="group relative flex w-full justify-center rounded-lg border border-transparent bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-green-400"
 					>
 						{#if loading}
 							<svg
-								class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+								class="mr-3 -ml-1 h-5 w-5 animate-spin text-white"
 								xmlns="http://www.w3.org/2000/svg"
 								fill="none"
 								viewBox="0 0 24 24"
@@ -172,7 +217,7 @@
 							</svg>
 							Memproses...
 						{:else}
-							<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
@@ -186,9 +231,9 @@
 				</div>
 
 				<!-- Demo Credentials -->
-				<div class="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-					<h4 class="text-sm font-semibold text-green-800 mb-2">Demo Credentials:</h4>
-					<div class="text-xs text-green-700 space-y-1">
+				<div class="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
+					<h4 class="mb-2 text-sm font-semibold text-green-800">Demo Credentials:</h4>
+					<div class="space-y-1 text-xs text-green-700">
 						<div><strong>Admin:</strong> admin@eltama.com / admin123</div>
 						<div><strong>HRD:</strong> michael@eltama.com / michael123</div>
 						<div><strong>Finance:</strong> sarah@eltama.com / sarah123</div>

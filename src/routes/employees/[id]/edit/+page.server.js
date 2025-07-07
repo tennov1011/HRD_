@@ -1,14 +1,47 @@
 import { fail } from '@sveltejs/kit';
-import { 
-  VITE_DIRECTUS_URL, 
-  VITE_DIRECTUS_TOKEN, 
-  VITE_FIREBASE_API_KEY, 
-  VITE_FIREBASE_AUTH_DOMAIN, 
-  VITE_FIREBASE_PROJECT_ID, 
-  VITE_FIREBASE_STORAGE_BUCKET, 
-  VITE_FIREBASE_MESSAGING_SENDER_ID, 
-  VITE_FIREBASE_APP_ID 
+import {
+  VITE_DIRECTUS_URL,
+  VITE_DIRECTUS_TOKEN,
+  VITE_FIREBASE_API_KEY,
 } from '$env/static/private';
+
+// Fungsi untuk format tampilan jam dari timestamp dengan WIB
+function formatTimeDisplay(timestamp) {
+  if (!timestamp) return '-';
+  
+  try {
+    // Jika timestamp dalam format YYYY-MM-DD HH:MM:SS+07:00 atau YYYY-MM-DD HH:MM:SS
+    if (typeof timestamp === 'string') {
+      // Hapus timezone offset jika ada (+07:00)
+      const cleanTimestamp = timestamp.replace(/\+\d{2}:\d{2}$/, '');
+      
+      if (cleanTimestamp.includes(' ')) {
+        const timePart = cleanTimestamp.split(' ')[1];
+        if (timePart) {
+          // Ambil HH:MM dari HH:MM:SS dan tambahkan WIB
+          const timeFormatted = timePart.substring(0, 5);
+          return `${timeFormatted} WIB`;
+        }
+      }
+    }
+    
+    // Jika format lain, coba parse sebagai Date
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+      const timeFormatted = date.toLocaleTimeString('id-ID', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Jakarta'
+      });
+      return `${timeFormatted} WIB`;
+    }
+    
+    return timestamp;
+  } catch {
+    return timestamp || '-';
+  }
+}
 
 // Load function untuk mengambil data karyawan yang akan diedit
 export async function load({ params }) {
@@ -21,7 +54,8 @@ export async function load({ params }) {
     console.log('Employee ID:', employeeId);
     console.log('Request URL:', `${directusUrl}/items/register/${employeeId}`);
 
-    const response = await fetch(`${directusUrl}/items/register/${employeeId}`, {
+    // Fetch employee data
+    const employeeResponse = await fetch(`${directusUrl}/items/register/${employeeId}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${directusToken}`,
@@ -29,71 +63,190 @@ export async function load({ params }) {
       }
     });
 
-    if (response.ok) {
-      const result = await response.json();
-      const employeeData = result.data;
+    // Fetch master data
+    const masterDataResponse = await fetch(`${directusUrl}/items/master_data`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${directusToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (employeeResponse.ok && masterDataResponse.ok) {
+      const employeeResult = await employeeResponse.json();
+      const masterDataResult = await masterDataResponse.json();
       
+      const employeeData = employeeResult.data;
+      const allMasterData = masterDataResult.data || [];
+
       console.log('✅ Employee data loaded successfully:', employeeData);
+      console.log('✅ Master data loaded successfully:', allMasterData.length, 'items');
+
+      // Debug master data shift items
+      const shiftItems = allMasterData.filter(item => item.category === 'shift' && item.status === 'aktif');
+      console.log('🔍 Raw shift items from master_data:', shiftItems);
+
+      // Kelompokkan data master berdasarkan kategori dan hanya ambil yang statusnya aktif
+      const masterData = {
+        divisi: allMasterData
+          .filter(item => item.category === 'divisi' && item.status === 'aktif')
+          .map(item => ({
+            value: item.nama,
+            label: item.nama,
+            id: item.id
+          })),
+        jabatan: allMasterData
+          .filter(item => item.category === 'jabatan' && item.status === 'aktif')
+          .map(item => ({
+            value: item.nama,
+            label: item.nama,
+            id: item.id
+          })),
+        lokasi_absen: allMasterData
+          .filter(item => item.category === 'lokasi_absen' && item.status === 'aktif')
+          .map(item => ({
+            value: item.nama,
+            label: item.nama,
+            id: item.id,
+            alamat: item.alamat || ''
+          })),
+        shift: allMasterData
+          .filter(item => item.category === 'shift' && item.status === 'aktif')
+          .map(item => ({
+            value: item.nama,
+            label: item.nama,
+            id: item.id,
+            jam_masuk: formatTimeDisplay(item.jam_masuk),
+            jam_keluar: formatTimeDisplay(item.jam_keluar)
+          }))
+      };
+
+      // Debug mapped master data
+      console.log('🔍 Mapped shift options:', masterData.shift);
       
+      // Debug dropdown values
+      console.log('=== DEBUGGING DROPDOWN VALUES ===');
+      console.log('Status Kerja:', employeeData.status_kerja);
+      console.log('Divisi:', employeeData.divisi);
+      console.log('Posisi Jabatan:', employeeData.jabatan);
+      console.log('Sistem Penggajian:', employeeData.penggajian);
+      console.log('Shift:', employeeData.shift);
+      console.log('Jenis Kelamin:', employeeData.kelamin);
+      console.log('Status Hubungan:', employeeData.status_hubungan);
+      console.log('Agama:', employeeData.agama);
+      console.log('Pendidikan Terakhir:', employeeData.pendidikan_terakhir);
+      console.log('Lokasi Absen:', employeeData.lokasi_absen);
+
       // Format tanggal_masuk untuk input date HTML (YYYY-MM-DD)
       let formattedTanggalMasuk = '';
       if (employeeData.tanggal_masuk) {
         try {
           const date = new Date(employeeData.tanggal_masuk);
           if (!isNaN(date.getTime())) {
-            // Format ke YYYY-MM-DD untuk input date
             formattedTanggalMasuk = date.toISOString().split('T')[0];
           }
         } catch (error) {
           console.warn('Error formatting tanggal_masuk:', error);
         }
       }
-      
-      // Update employeeData dengan tanggal yang sudah diformat
-      const formattedEmployeeData = {
+
+      // Normalisasi nilai dropdown untuk memastikan matching dengan options
+      const normalizedEmployeeData = {
         ...employeeData,
-        tanggal_masuk: formattedTanggalMasuk
+        tanggal_masuk: formattedTanggalMasuk,
+        // Normalisasi nilai dropdown ke lowercase
+        status_kerja: employeeData.status_kerja?.toLowerCase() || '',
+        divisi: employeeData.divisi?.toLowerCase() || '',
+        jabatan: employeeData.jabatan?.toLowerCase() || '',
+        penggajian: employeeData.penggajian?.toLowerCase() || '',
+        shift: employeeData.shift?.toLowerCase() || '',
+        kelamin: employeeData.kelamin?.toLowerCase() || '',
+        status_hubungan: employeeData.status_hubungan?.toLowerCase() || '',
+        agama: employeeData.agama?.toLowerCase() || '',
+        pendidikan_terakhir: employeeData.pendidikan_terakhir?.toLowerCase() || '',
+        lokasi_absen: employeeData.lokasi_absen?.toLowerCase() || ''
       };
-      
-      console.log('📅 Formatted tanggal_masuk:', formattedTanggalMasuk);
-      
+
+      console.log('=== NORMALIZED DROPDOWN VALUES ===');
+      console.log('Status Kerja (normalized):', normalizedEmployeeData.status_kerja);
+      console.log('Divisi (normalized):', normalizedEmployeeData.divisi);
+      console.log('Posisi Jabatan (normalized):', normalizedEmployeeData.jabatan);
+
       return {
-        employee: formattedEmployeeData,
+        employee: normalizedEmployeeData,
+        masterData,
         success: true
       };
     } else {
-      console.error('❌ Failed to load employee data:', response.status, response.statusText);
+      // Handle error saat fetch employee atau master data
+      let errorMessage = 'Gagal mengambil data';
+      
+      if (!employeeResponse.ok) {
+        console.error('❌ Failed to load employee data:', employeeResponse.status, employeeResponse.statusText);
+        errorMessage = `Gagal mengambil data karyawan: ${employeeResponse.status} ${employeeResponse.statusText}`;
+      }
+      
+      if (!masterDataResponse.ok) {
+        console.error('❌ Failed to load master data:', masterDataResponse.status, masterDataResponse.statusText);
+        errorMessage += ` | Gagal mengambil master data: ${masterDataResponse.status} ${masterDataResponse.statusText}`;
+      }
+
       return {
         employee: null,
-        error: `Gagal mengambil data karyawan: ${response.status} ${response.statusText}`
+        masterData: { divisi: [], jabatan: [], lokasi_absen: [], shift: [] },
+        error: errorMessage
       };
     }
   } catch (error) {
     console.error('❌ Error loading employee data:', error);
     return {
       employee: null,
+      masterData: { divisi: [], jabatan: [], lokasi_absen: [], shift: [] },
       error: `Terjadi kesalahan saat mengambil data: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
 }
 
-// Firebase configuration (untuk upload file jika diperlukan)
-const firebaseConfig = {
-  apiKey: VITE_FIREBASE_API_KEY,
-  authDomain: VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: VITE_FIREBASE_PROJECT_ID,
-  storageBucket: VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: VITE_FIREBASE_APP_ID
-};
+// Function untuk upload file ke Directus Files collection
+async function uploadFileToDirectus(file, directusUrl, directusToken) {
+  try {
+    console.log('=== UPLOADING FILE TO DIRECTUS ===');
+    console.log('File name:', file.name);
+    console.log('File size:', file.size);
+    console.log('File type:', file.type);
 
-// Function untuk upload file ke Firebase Storage (jika diperlukan di masa depan)
-async function uploadFileToFirebase(file, filename) {
-  // Placeholder untuk implementasi Firebase Storage upload
-  // Untuk saat ini, kita hanya return filename
-  console.log('Firebase config available:', !!firebaseConfig.apiKey);
-  console.log('File to upload:', filename);
-  return filename;
+    // Buat FormData untuk upload file
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Upload ke Directus Files collection
+    const uploadResponse = await fetch(`${directusUrl}/files`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${directusToken}`
+        // Jangan set Content-Type untuk FormData, biarkan browser yang set
+      },
+      body: formData
+    });
+
+    console.log('Upload response status:', uploadResponse.status);
+    console.log('Upload response ok:', uploadResponse.ok);
+
+    if (uploadResponse.ok) {
+      const uploadResult = await uploadResponse.json();
+      console.log('✅ File uploaded successfully:', uploadResult);
+      
+      // Return file ID yang bisa digunakan untuk relasi
+      return uploadResult.data.id;
+    } else {
+      const errorText = await uploadResponse.text();
+      console.error('❌ File upload failed:', errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+    }
+  } catch (error) {
+    console.error('❌ File upload error:', error);
+    throw error;
+  }
 }
 
 export const actions = {
@@ -103,7 +256,7 @@ export const actions = {
     console.log('VITE_DIRECTUS_URL:', VITE_DIRECTUS_URL ? 'SET' : 'NOT SET');
     console.log('VITE_DIRECTUS_TOKEN:', VITE_DIRECTUS_TOKEN ? 'SET' : 'NOT SET');
     console.log('VITE_FIREBASE_API_KEY:', VITE_FIREBASE_API_KEY ? 'SET' : 'NOT SET');
-    
+
     if (!VITE_DIRECTUS_URL || !VITE_DIRECTUS_TOKEN) {
       console.error('Missing required environment variables for Directus');
       return fail(500, {
@@ -111,34 +264,43 @@ export const actions = {
         values: {}
       });
     }
-    
+
     const data = await request.formData();
-    
+
     // Handle file upload untuk foto_ktp
     const foto_ktp = data.get('foto_ktp');
-    let uploadedFileName = null;
-    
-    // Upload file ke Firebase jika ada
+    let uploadedFileId = null;
+
+    // Upload file ke Directus jika ada
     if (foto_ktp && foto_ktp instanceof File && foto_ktp.size > 0) {
       try {
-        uploadedFileName = await uploadFileToFirebase(foto_ktp, foto_ktp.name);
-        console.log('File uploaded successfully:', uploadedFileName);
+        console.log('=== PROCESSING FILE UPLOAD ===');
+        console.log('File detected:', foto_ktp.name, foto_ktp.size, 'bytes');
+        
+        const directusUrl = VITE_DIRECTUS_URL || 'https://directus.eltamaprimaindo.com';
+        const directusToken = VITE_DIRECTUS_TOKEN || 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
+        
+        uploadedFileId = await uploadFileToDirectus(foto_ktp, directusUrl, directusToken);
+        console.log('✅ File uploaded with ID:', uploadedFileId);
       } catch (uploadError) {
-        console.error('File upload error:', uploadError);
-        // Tetap lanjutkan proses meskipun upload file gagal
-        uploadedFileName = foto_ktp.name;
+        console.error('❌ File upload failed:', uploadError);
+        return fail(400, {
+          error: `Gagal mengupload file: ${uploadError.message}`,
+          values: {}
+        });
       }
     }
-    
-    // Ekstrak data dari form dengan type casting - 30 field baru (menghapus tanggal_non_aktif dan masa_kerja)
+
+    // Ekstrak data dari form dengan type casting
     const employeeData = {
       nama_lengkap: String(data.get('nama_lengkap') || '').trim(),
       status_kerja: String(data.get('status_kerja') || ''),
       penggajian: String(data.get('penggajian') || ''),
+      shift: String(data.get('shift') || ''),
       no_karyawan: String(data.get('no_karyawan') || '').trim(),
       tanggal_masuk: String(data.get('tanggal_masuk') || ''),
       divisi: String(data.get('divisi') || ''),
-      posisi_jabatan: String(data.get('posisi_jabatan') || ''),
+      jabatan: String(data.get('jabatan') || ''),
       no_telp: String(data.get('no_telp') || '').trim(),
       email: String(data.get('email') || '').trim().toLowerCase(),
       kontak_darurat: String(data.get('kontak_darurat') || '').trim(),
@@ -159,14 +321,52 @@ export const actions = {
       faskes_tingkat_1: String(data.get('faskes_tingkat_1') || '').trim(),
       nama_bank: String(data.get('nama_bank') || '').trim(),
       no_rekening_bank: String(data.get('no_rekening_bank') || '').trim(),
-      foto_ktp: uploadedFileName,
+      foto_ktp: uploadedFileId, // Simpan file ID, bukan filename
       kelamin: String(data.get('kelamin') || ''),
       lokasi_absen: String(data.get('lokasi_absen') || '')
     };
 
     // Validasi fleksibel untuk edit - hanya validasi format jika field diisi
     const errors = {};
-    
+
+    // Fetch master data untuk validasi
+    let masterDataForValidation;
+    try {
+      const directusUrl = VITE_DIRECTUS_URL || 'https://directus.eltamaprimaindo.com';
+      const directusToken = VITE_DIRECTUS_TOKEN || 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
+      
+      const masterDataResponse = await fetch(`${directusUrl}/items/master_data`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${directusToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (masterDataResponse.ok) {
+        const masterDataResult = await masterDataResponse.json();
+        const allData = masterDataResult.data || [];
+        
+        masterDataForValidation = {
+          divisi: allData.filter(item => item.category === 'divisi' && item.status === 'aktif').map(item => item.nama),
+          jabatan: allData.filter(item => item.category === 'jabatan' && item.status === 'aktif').map(item => item.nama),
+          lokasi_absen: allData.filter(item => item.category === 'lokasi_absen' && item.status === 'aktif').map(item => item.nama),
+          shift: allData.filter(item => item.category === 'shift' && item.status === 'aktif').map(item => item.nama)
+        };
+      } else {
+        throw new Error('Failed to fetch master data for validation');
+      }
+    } catch (error) {
+      console.warn('Error fetching master data for validation, using fallback:', error);
+      // Fallback to static validation
+      masterDataForValidation = {
+        divisi: ['hrd', 'finance', 'marketing', 'it', 'operations', 'sales', 'production', 'quality_control'],
+        jabatan: ['staff', 'supervisor', 'manager', 'senior_manager', 'director', 'gm', 'ceo'],
+        lokasi_absen: ['kantor_pusat', 'cabang_jakarta', 'cabang_bandung', 'cabang_surabaya', 'cabang_medan', 'remote'],
+        shift: ['pagi', 'siang', 'malam', 'reguler', 'fleksibel']
+      };
+    }
+
     // Validasi nama lengkap (opsional, hanya jika diisi)
     if (employeeData.nama_lengkap && employeeData.nama_lengkap.length > 0) {
       if (employeeData.nama_lengkap.length < 2) {
@@ -175,22 +375,24 @@ export const actions = {
         errors.nama_lengkap = 'Nama lengkap maksimal 100 karakter';
       }
     }
-    
+
     // Validasi status kerja (opsional, hanya jika diisi)
     const validStatusKerja = ['tetap', 'kontrak', 'magang', 'freelance'];
     if (employeeData.status_kerja && !validStatusKerja.includes(employeeData.status_kerja)) {
       errors.status_kerja = 'Status kerja tidak valid';
     }
-    
+
     // Validasi penggajian (opsional, hanya jika diisi)
-    if (employeeData.penggajian && employeeData.penggajian.length > 0) {
-      if (!/^\d+$/.test(employeeData.penggajian)) {
-        errors.penggajian = 'Penggajian harus berupa angka';
-      } else if (employeeData.penggajian.length > 15) {
-        errors.penggajian = 'Penggajian maksimal 15 digit';
-      }
+    const validPenggajian = ['harian', 'bulanan'];
+    if (employeeData.penggajian && !validPenggajian.includes(employeeData.penggajian)) {
+      errors.penggajian = 'Penggajian harus berupa "Harian" atau "Bulanan"';
     }
-    
+
+    // Validasi shift (opsional, hanya jika diisi)
+    if (employeeData.shift && !masterDataForValidation.shift.includes(employeeData.shift)) {
+      errors.shift = 'Shift tidak valid';
+    }
+
     // Validasi no karyawan (opsional, hanya jika diisi)
     if (employeeData.no_karyawan && employeeData.no_karyawan.length > 0) {
       if (employeeData.no_karyawan.length < 3) {
@@ -199,7 +401,7 @@ export const actions = {
         errors.no_karyawan = 'No karyawan maksimal 20 karakter';
       }
     }
-    
+
     // Validasi tanggal masuk (opsional, hanya jika diisi)
     if (employeeData.tanggal_masuk && employeeData.tanggal_masuk.length > 0) {
       const startDate = new Date(employeeData.tanggal_masuk);
@@ -210,17 +412,15 @@ export const actions = {
         errors.tanggal_masuk = 'Tanggal masuk tidak boleh di masa depan';
       }
     }
-    
+
     // Validasi divisi (opsional, hanya jika diisi)
-    const validDivisions = ['hrd', 'finance', 'marketing', 'it', 'operations', 'sales', 'production', 'quality_control'];
-    if (employeeData.divisi && !validDivisions.includes(employeeData.divisi)) {
+    if (employeeData.divisi && !masterDataForValidation.divisi.includes(employeeData.divisi)) {
       errors.divisi = 'Divisi tidak valid';
     }
 
     // Validasi posisi jabatan (opsional, hanya jika diisi)
-    const validPositions = ['staff', 'supervisor', 'manager', 'senior_manager', 'director', 'gm', 'ceo'];
-    if (employeeData.posisi_jabatan && !validPositions.includes(employeeData.posisi_jabatan)) {
-      errors.posisi_jabatan = 'Posisi jabatan tidak valid';
+    if (employeeData.jabatan && !masterDataForValidation.jabatan.includes(employeeData.jabatan)) {
+      errors.jabatan = 'Posisi jabatan tidak valid';
     }
 
     // Validasi nomor telepon (opsional, hanya jika diisi)
@@ -233,7 +433,7 @@ export const actions = {
         errors.no_telp = 'Format nomor telepon tidak valid';
       }
     }
-    
+
     // Validasi email (opsional, hanya jika diisi)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (employeeData.email && employeeData.email.length > 0) {
@@ -243,42 +443,42 @@ export const actions = {
         errors.email = 'Email maksimal 100 karakter';
       }
     }
-    
+
     // Validasi NIP (opsional, hanya jika diisi)
     if (employeeData.nip && employeeData.nip.length > 0) {
       if (employeeData.nip.length < 8) {
         errors.nip = 'NIP minimal 8 karakter';
       }
     }
-    
+
     // Validasi no KTP (opsional, hanya jika diisi)
     if (employeeData.no_ktp && employeeData.no_ktp.length > 0) {
       if (employeeData.no_ktp.length !== 16 || !/^\d{16}$/.test(employeeData.no_ktp)) {
         errors.no_ktp = 'No KTP harus 16 digit angka';
       }
     }
-    
+
     // Validasi no KK (opsional, hanya jika diisi)
     if (employeeData.no_kk && employeeData.no_kk.length > 0) {
       if (employeeData.no_kk.length !== 16 || !/^\d{16}$/.test(employeeData.no_kk)) {
         errors.no_kk = 'No KK harus 16 digit angka';
       }
     }
-    
+
     // Validasi no NPWP (opsional, hanya jika diisi)
     if (employeeData.no_npwp && employeeData.no_npwp.length > 0) {
       if (employeeData.no_npwp.length < 15) {
         errors.no_npwp = 'No NPWP minimal 15 karakter';
       }
     }
-    
+
     // Validasi tempat tanggal lahir (opsional, hanya jika diisi)
     if (employeeData.tempat_tanggal_lahir && employeeData.tempat_tanggal_lahir.length > 0) {
       if (employeeData.tempat_tanggal_lahir.length < 10) {
         errors.tempat_tanggal_lahir = 'Tempat, tanggal lahir minimal 10 karakter';
       }
     }
-    
+
     // Validasi alamat KTP (opsional, hanya jika diisi)
     if (employeeData.alamat_ktp && employeeData.alamat_ktp.length > 0) {
       if (employeeData.alamat_ktp.length < 10) {
@@ -287,7 +487,7 @@ export const actions = {
         errors.alamat_ktp = 'Alamat KTP maksimal 500 karakter';
       }
     }
-    
+
     // Validasi alamat domisili (opsional, hanya jika diisi)
     if (employeeData.alamat_domisili && employeeData.alamat_domisili.length > 0) {
       if (employeeData.alamat_domisili.length < 10) {
@@ -296,12 +496,12 @@ export const actions = {
         errors.alamat_domisili = 'Alamat domisili maksimal 500 karakter';
       }
     }
-    
+
     // Validasi asal kota (optional)
     if (employeeData.asal_kota && employeeData.asal_kota.length > 50) {
       errors.asal_kota = 'Asal kota maksimal 50 karakter';
     }
-    
+
     // Validasi umur (optional) - sekarang sebagai String
     if (employeeData.umur && employeeData.umur.length > 0) {
       if (!/^\d+$/.test(employeeData.umur)) {
@@ -313,51 +513,57 @@ export const actions = {
         }
       }
     }
-    
+
     // Validasi status hubungan (optional)
     const validStatusHubungan = ['lajang', 'menikah', 'cerai', 'janda_duda'];
     if (employeeData.status_hubungan && !validStatusHubungan.includes(employeeData.status_hubungan)) {
       errors.status_hubungan = 'Status hubungan tidak valid';
     }
-    
+
     // Validasi agama (optional)
     const validAgama = ['islam', 'kristen', 'katolik', 'hindu', 'budha', 'konghucu', 'lainnya'];
     if (employeeData.agama && !validAgama.includes(employeeData.agama)) {
       errors.agama = 'Agama tidak valid';
     }
-    
-    // Validasi tanggungan (optional) - sekarang sebagai String
+
+    // Validasi tanggungan (optional) - format K/(tanggungan)
     if (employeeData.tanggungan && employeeData.tanggungan.length > 0) {
-      if (!/^\d+$/.test(employeeData.tanggungan)) {
-        errors.tanggungan = 'Jumlah tanggungan harus berupa angka';
-      } else if (employeeData.tanggungan.length > 2) {
-        errors.tanggungan = 'Jumlah tanggungan maksimal 2 digit';
+      // Format yang diharapkan: K/0, K/1, K/2, K/3, dst.
+      const tanggunganPattern = /^K\/\d{1,2}$/;
+      if (!tanggunganPattern.test(employeeData.tanggungan)) {
+        errors.tanggungan = 'Format tanggungan harus K/(angka), contoh: K/0, K/1, K/2';
+      } else {
+        // Validasi nilai tanggungan (ambil angka setelah K/)
+        const tanggunganValue = parseInt(employeeData.tanggungan.split('/')[1]);
+        if (tanggunganValue > 20) {
+          errors.tanggungan = 'Jumlah tanggungan maksimal 20';
+        }
       }
     }
-    
+
     // Validasi pendidikan terakhir (optional)
     const validPendidikan = ['sd', 'smp', 'sma', 'd1', 'd2', 'd3', 's1', 's2', 's3'];
     if (employeeData.pendidikan_terakhir && !validPendidikan.includes(employeeData.pendidikan_terakhir)) {
       errors.pendidikan_terakhir = 'Pendidikan terakhir tidak valid';
     }
-    
+
     // Validasi no BPJS (opsional, hanya jika diisi)
     if (employeeData.no_bpjs && employeeData.no_bpjs.length > 0) {
       if (employeeData.no_bpjs.length < 8 || employeeData.no_bpjs.length > 13) {
         errors.no_bpjs = 'No BPJS harus 8-13 digit';
       }
     }
-    
+
     // Validasi faskes tingkat 1 (opsional, hanya jika diisi)
     if (employeeData.faskes_tingkat_1 && employeeData.faskes_tingkat_1.length > 100) {
       errors.faskes_tingkat_1 = 'Faskes tingkat 1 maksimal 100 karakter';
     }
-    
+
     // Validasi nama bank (opsional, hanya jika diisi)
     if (employeeData.nama_bank && employeeData.nama_bank.length > 50) {
       errors.nama_bank = 'Nama bank maksimal 50 karakter';
     }
-    
+
     // Validasi no rekening bank (opsional, hanya jika diisi)
     if (employeeData.no_rekening_bank && employeeData.no_rekening_bank.length > 0) {
       if (employeeData.no_rekening_bank.length < 8 || employeeData.no_rekening_bank.length > 20) {
@@ -372,8 +578,7 @@ export const actions = {
     }
 
     // Validasi lokasi absen (opsional, hanya jika diisi)
-    const validLocations = ['kantor_pusat', 'cabang_jakarta', 'cabang_bandung', 'cabang_surabaya', 'cabang_medan', 'remote'];
-    if (employeeData.lokasi_absen && !validLocations.includes(employeeData.lokasi_absen)) {
+    if (employeeData.lokasi_absen && !masterDataForValidation.lokasi_absen.includes(employeeData.lokasi_absen)) {
       errors.lokasi_absen = 'Lokasi absen tidak valid';
     }
 
@@ -388,7 +593,7 @@ export const actions = {
 
     // Buat data final yang akan dikirim ke Directus - hanya kirim field yang diisi
     const finalData = {};
-    
+
     // Hanya tambahkan field ke finalData jika tidak kosong
     if (employeeData.nama_lengkap && employeeData.nama_lengkap.trim()) {
       finalData.nama_lengkap = employeeData.nama_lengkap;
@@ -399,6 +604,9 @@ export const actions = {
     if (employeeData.penggajian && employeeData.penggajian.trim()) {
       finalData.penggajian = employeeData.penggajian;
     }
+    if (employeeData.shift) {
+      finalData.shift = employeeData.shift;
+    }
     if (employeeData.no_karyawan && employeeData.no_karyawan.trim()) {
       finalData.no_karyawan = employeeData.no_karyawan;
     }
@@ -408,8 +616,8 @@ export const actions = {
     if (employeeData.divisi) {
       finalData.divisi = employeeData.divisi;
     }
-    if (employeeData.posisi_jabatan) {
-      finalData.posisi_jabatan = employeeData.posisi_jabatan;
+    if (employeeData.jabatan) {
+      finalData.jabatan = employeeData.jabatan;
     }
     if (employeeData.no_telp && employeeData.no_telp.trim()) {
       finalData.no_telp = employeeData.no_telp;
@@ -477,8 +685,8 @@ export const actions = {
     if (employeeData.lokasi_absen) {
       finalData.lokasi_absen = employeeData.lokasi_absen;
     }
-    if (uploadedFileName) {
-      finalData.foto_ktp = uploadedFileName;
+    if (uploadedFileId) {
+      finalData.foto_ktp = uploadedFileId;
     }
 
     try {
@@ -487,7 +695,7 @@ export const actions = {
       const directusToken = VITE_DIRECTUS_TOKEN || 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
       const employeeId = params.id;
       const requestUrl = `${directusUrl}/items/register/${employeeId}`;
-      
+
       // Log data yang akan dikirim untuk debugging
       console.log('=== DEBUGGING DIRECTUS REQUEST ===');
       console.log('Environment Variables:');
@@ -501,7 +709,7 @@ export const actions = {
         'Authorization': `Bearer ${directusToken}`
       });
       console.log('Request Body:', JSON.stringify(finalData, null, 2));
-      
+
       // Update data ke Directus collection 'items/register' menggunakan PATCH
       const response = await fetch(requestUrl, {
         method: 'PATCH',
@@ -511,18 +719,18 @@ export const actions = {
         },
         body: JSON.stringify(finalData)
       });
-      
+
       // Log response untuk debugging
       console.log('=== DIRECTUS RESPONSE ===');
       console.log('Response Status:', response.status);
       console.log('Response Status Text:', response.statusText);
       console.log('Response OK:', response.ok);
-      
+
       // Clone response untuk bisa dibaca berkali-kali
       const responseClone = response.clone();
       const responseText = await responseClone.text();
       console.log('Response Text:', responseText);
-      
+
       if (response.ok) {
         const successData = await response.json();
         console.log('✅ Success response:', successData);
@@ -538,12 +746,12 @@ export const actions = {
           console.log('❌ Failed to parse error response as JSON:', parseError);
           errorData = { message: responseText };
         }
-        
+
         console.log('❌ Error data:', errorData);
-        
+
         // Buat pesan error yang lebih spesifik
         let errorMessage = 'Terjadi kesalahan saat menyimpan data';
-        
+
         if (response.status === 400) {
           if (errorData?.errors) {
             // Jika ada detail error dari validasi
@@ -576,7 +784,7 @@ export const actions = {
         } else {
           errorMessage = `HTTP Error ${response.status}: ${errorData?.message || response.statusText}`;
         }
-        
+
         return fail(response.status, {
           error: errorMessage,
           values: employeeData
@@ -588,9 +796,9 @@ export const actions = {
       console.error('Error type:', error.constructor?.name || 'Unknown');
       console.error('Error message:', error.message || String(err));
       console.error('Error stack:', error.stack || 'No stack trace');
-      
+
       let errorMessage = 'Terjadi kesalahan jaringan.';
-      
+
       if (error.name === 'TypeError' && error.message?.includes('fetch')) {
         errorMessage = 'Tidak dapat terhubung ke server Directus. Periksa koneksi internet.';
       } else if (error.name === 'AbortError') {
@@ -600,7 +808,7 @@ export const actions = {
       } else {
         errorMessage = `Kesalahan sistem: ${error.message || String(err)}`;
       }
-      
+
       return fail(500, {
         error: errorMessage,
         values: employeeData

@@ -11,9 +11,10 @@
     nama_lengkap: string;
     no_karyawan: string;
     divisi: string;
-    posisi_jabatan: string;
+    jabatan: string;
     status_kerja: string;
     lokasi_absen: string;
+    shift?: string;
   }
   
   // Data karyawan dari server
@@ -30,14 +31,67 @@
   // Loading state
   let isLoading = false;
   
-  // Computed filtered employees
+  // Computed filtered employees dengan debugging yang lebih detail
   $: filteredEmployees = employees.filter(employee => {
-    const matchesSearch = employee.nama_lengkap.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (employee.no_karyawan && employee.no_karyawan.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                         employee.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDivisi = selectedDivisi === '' || employee.divisi === selectedDivisi;
-    const matchesStatus = selectedStatusKerja === '' || employee.status_kerja === selectedStatusKerja;
-    return matchesSearch && matchesDivisi && matchesStatus;
+    // Debug setiap employee yang difilter
+    if (searchQuery.trim()) {
+      console.log('=== DEBUGGING SEARCH FOR:', searchQuery.trim(), '===');
+      console.log('Employee:', {
+        id: employee.id,
+        nama_lengkap: employee.nama_lengkap,
+        no_karyawan: employee.no_karyawan,
+        nama_lower: employee.nama_lengkap?.toLowerCase?.(),
+        search_term: searchQuery.toLowerCase().trim()
+      });
+    }
+    
+    // Jika tidak ada search query, hanya filter berdasarkan divisi dan status
+    if (!searchQuery.trim()) {
+      // Normalisasi divisi untuk perbandingan
+      const normalizedDivisi = employee.divisi?.toLowerCase()?.trim();
+      const matchesDivisi = selectedDivisi === '' || normalizedDivisi === selectedDivisi;
+      
+      // Normalisasi status kerja untuk perbandingan
+      const normalizedStatus = employee.status_kerja?.toLowerCase()?.trim();
+      const matchesStatus = selectedStatusKerja === '' || normalizedStatus === selectedStatusKerja;
+      
+      return matchesDivisi && matchesStatus;
+    }
+    
+    // Search logic - fokus pada nama dan nomor karyawan dengan handling yang lebih robust
+    const searchTerm = searchQuery.toLowerCase().trim();
+    const namaLengkap = String(employee.nama_lengkap || '').toLowerCase().trim();
+    const noKaryawan = String(employee.no_karyawan || '').toLowerCase().trim();
+    const employeeId = String(employee.id || '').toLowerCase().trim();
+    
+    // Debug matching
+    const namaMatch = namaLengkap.includes(searchTerm);
+    const noMatch = noKaryawan.includes(searchTerm);
+    const idMatch = employeeId.includes(searchTerm);
+    
+    if (searchQuery.trim()) {
+      console.log('Search matches:', {
+        namaMatch,
+        noMatch,
+        idMatch,
+        namaLengkap,
+        searchTerm
+      });
+    }
+    
+    const matchesSearch = namaMatch || noMatch || idMatch;
+    
+    // Jika search tidak cocok, return false
+    if (!matchesSearch) return false;
+    
+    // Filter divisi dan status hanya jika search cocok
+    const normalizedDivisi = employee.divisi?.toLowerCase()?.trim();
+    const matchesDivisi = selectedDivisi === '' || normalizedDivisi === selectedDivisi;
+    
+    const normalizedStatus = employee.status_kerja?.toLowerCase()?.trim();
+    const matchesStatus = selectedStatusKerja === '' || normalizedStatus === selectedStatusKerja;
+    
+    return matchesDivisi && matchesStatus;
   });
   
   // Reset to first page when filters change
@@ -54,6 +108,11 @@
   
   // Format divisi display
   const formatDivisi = (divisi: string) => {
+    if (!divisi) return '-';
+    
+    // Normalisasi ke lowercase untuk mapping
+    const normalizedDivisi = divisi.toLowerCase().trim();
+    
     const divisiMap: { [key: string]: string } = {
       'hrd': 'Human Resources',
       'finance': 'Finance',
@@ -64,7 +123,7 @@
       'production': 'Production',
       'quality_control': 'Quality Control'
     };
-    return divisiMap[divisi] || divisi;
+    return divisiMap[normalizedDivisi] || divisi.charAt(0).toUpperCase() + divisi.slice(1);
   };
 
   // Format posisi jabatan display
@@ -83,13 +142,18 @@
 
   // Format status kerja display
   const formatStatusKerja = (status: string) => {
+    if (!status) return '-';
+    
+    // Normalisasi ke lowercase untuk mapping
+    const normalizedStatus = status.toLowerCase().trim();
+    
     const statusMap: { [key: string]: string } = {
       'tetap': 'Tetap',
       'kontrak': 'Kontrak',
       'magang': 'Magang',
       'freelance': 'Freelance'
     };
-    return statusMap[status] || status;
+    return statusMap[normalizedStatus] || status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   // Format lokasi absen display
@@ -105,11 +169,47 @@
     return lokasiMap[lokasi] || lokasi;
   };
   
+  // Format shift display
+  const formatShift = (shift: string) => {
+    if (!shift) return '-';
+    
+    const shiftMap: { [key: string]: string } = {
+      'pagi': 'Pagi',
+      'siang': 'Siang', 
+      'malam': 'Malam',
+      'reguler': 'Reguler',
+      'fleksibel': 'Fleksibel'
+    };
+    return shiftMap[shift.toLowerCase()?.trim()] || shift;
+  };
+
   // Get unique divisi untuk filter
-  $: uniqueDivisi = [...new Set(employees.map(emp => emp.divisi))].filter(Boolean);
+  $: uniqueDivisi = [...new Set(employees.map(emp => emp.divisi?.toLowerCase()?.trim()).filter(Boolean))];
   
-  // Get unique status kerja untuk filter
-  $: uniqueStatusKerja = [...new Set(employees.map(emp => emp.status_kerja))].filter(Boolean);
+  // Get unique status kerja untuk filter dengan normalisasi
+  $: uniqueStatusKerja = [...new Set(employees.map(emp => {
+    if (!emp.status_kerja) return null;
+    // Normalisasi status kerja ke lowercase dan trim whitespace
+    return emp.status_kerja.toLowerCase().trim();
+  }).filter(Boolean))];
+  
+  // Debug: log unique status untuk troubleshooting
+  $: {
+    console.log('Unique Status Kerja:', uniqueStatusKerja);
+    console.log('All Status Kerja:', employees.map(emp => emp.status_kerja).filter(Boolean));
+    console.log('Total employees:', employees.length);
+    console.log('Search query:', searchQuery);
+    console.log('Filtered employees:', filteredEmployees.length);
+    
+    // Debug search results
+    if (searchQuery.trim()) {
+      console.log('Search term:', searchQuery.toLowerCase().trim());
+      console.log('Employees names:', employees.map(emp => emp.nama_lengkap?.toLowerCase()));
+      console.log('Matches:', employees.filter(emp => 
+        emp.nama_lengkap?.toLowerCase()?.includes(searchQuery.toLowerCase().trim())
+      ).map(emp => emp.nama_lengkap));
+    }
+  }
   
   // Navigation functions
   const handleAddEmployee = () => {
@@ -210,7 +310,7 @@
             </div>
             <div class="ml-4">
               <p class="text-sm text-gray-500">Karyawan Tetap</p>
-              <p class="text-2xl font-bold text-gray-900">{employees.filter(emp => emp.status_kerja === 'tetap').length}</p>
+              <p class="text-2xl font-bold text-gray-900">{employees.filter(emp => emp.status_kerja?.toLowerCase()?.trim() === 'tetap').length}</p>
             </div>
           </div>
         </div>
@@ -224,7 +324,7 @@
             </div>
             <div class="ml-4">
               <p class="text-sm text-gray-500">Karyawan Kontrak</p>
-              <p class="text-2xl font-bold text-gray-900">{employees.filter(emp => emp.status_kerja === 'kontrak').length}</p>
+              <p class="text-2xl font-bold text-gray-900">{employees.filter(emp => emp.status_kerja?.toLowerCase()?.trim() === 'kontrak').length}</p>
             </div>
           </div>
         </div>
@@ -252,7 +352,7 @@
         <!-- Search -->
         <div class="flex-1">
           <label for="search" class="block text-sm font-medium text-gray-700 mb-2">
-            Cari Karyawan
+            Cari Karyawan {searchQuery ? `(${filteredEmployees.length} hasil)` : ''}
           </label>
           <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -265,7 +365,7 @@
               id="search"
               bind:value={searchQuery}
               placeholder="Cari berdasarkan nama, nomor karyawan, atau ID..."
-              class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 {searchQuery ? 'bg-blue-50' : ''}"
             />
           </div>
         </div>
@@ -299,7 +399,9 @@
           >
             <option value="">Semua Status</option>
             {#each uniqueStatusKerja as status}
-              <option value={status}>{formatStatusKerja(status)}</option>
+              {#if status}
+                <option value={status}>{formatStatusKerja(status)}</option>
+              {/if}
             {/each}
           </select>
         </div>
@@ -319,6 +421,25 @@
       </div>
     </div>
     </div>
+
+    <!-- Search Results Info -->
+    {#if searchQuery || selectedDivisi || selectedStatusKerja}
+      <div class="px-6 mb-4">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 text-blue-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-blue-800">
+              Menampilkan <span class="font-semibold">{filteredEmployees.length}</span> karyawan 
+              {#if searchQuery}dengan pencarian "{searchQuery}"{/if}
+              {#if selectedDivisi}di divisi {formatDivisi(selectedDivisi)}{/if}
+              {#if selectedStatusKerja}dengan status {formatStatusKerja(selectedStatusKerja)}{/if}
+            </p>
+          </div>
+        </div>
+      </div>
+    {/if}
 
     <!-- Table -->
     <div class="px-6">
@@ -343,6 +464,9 @@
                 Lokasi Absen
               </th>
               <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Shift
+              </th>
+              <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Aksi
               </th>
             </tr>
@@ -352,9 +476,9 @@
               <tr class="hover:bg-gray-50 transition-colors duration-200">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div>
-                    <div class="font-medium text-gray-900">{employee.nama_lengkap}</div>
+                    <div class="font-medium text-gray-900">{employee.nama_lengkap || 'Nama tidak tersedia'}</div>
                     <div class="text-sm text-gray-500">
-                      {employee.no_karyawan}
+                      {employee.no_karyawan || 'Nomor tidak tersedia'}
                     </div>
                   </div>
                 </td>
@@ -362,19 +486,29 @@
                   <span class="text-sm text-gray-900">{formatDivisi(employee.divisi)}</span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm text-gray-900">{formatPosisiJabatan(employee.posisi_jabatan)}</span>
+                  <span class="text-sm text-gray-900">{formatPosisiJabatan(employee.jabatan)}</span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="inline-flex px-3 py-1 text-xs font-medium rounded-full
-                    {employee.status_kerja === 'tetap' ? 'bg-green-100 text-green-800' : 
-                     employee.status_kerja === 'kontrak' ? 'bg-yellow-100 text-yellow-800' : 
-                     employee.status_kerja === 'magang' ? 'bg-blue-100 text-blue-800' :
+                    {employee.status_kerja?.toLowerCase()?.trim() === 'tetap' ? 'bg-green-100 text-green-800' : 
+                     employee.status_kerja?.toLowerCase()?.trim() === 'kontrak' ? 'bg-yellow-100 text-yellow-800' : 
+                     employee.status_kerja?.toLowerCase()?.trim() === 'magang' ? 'bg-blue-100 text-blue-800' :
                      'bg-gray-100 text-gray-800'}">
-                    {formatStatusKerja(employee.status_kerja)}
+                    {formatStatusKerja(employee.status_kerja || '')}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="text-sm text-gray-900">{formatLokasiAbsen(employee.lokasi_absen)}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex px-3 py-1 text-xs font-medium rounded-full
+                    {employee.shift === 'pagi' ? 'bg-orange-100 text-orange-800' : 
+                     employee.shift === 'siang' ? 'bg-yellow-100 text-yellow-800' : 
+                     employee.shift === 'malam' ? 'bg-indigo-100 text-indigo-800' :
+                     employee.shift === 'reguler' ? 'bg-green-100 text-green-800' :
+                     'bg-gray-100 text-gray-800'}">
+                    {formatShift(employee.shift || '')}
+                  </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button
@@ -387,7 +521,7 @@
               </tr>
             {:else}
               <tr>
-                <td colspan="6" class="px-6 py-12 text-center">
+                <td colspan="7" class="px-6 py-12 text-center">
                   <div class="flex flex-col items-center">
                     <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>

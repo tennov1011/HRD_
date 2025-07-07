@@ -11,7 +11,8 @@
 
 	// Animation state
 	let loaded = false;
-  let showPassword = false;
+	let showPassword = false;
+	let showImageModal = false;
 
 	// Modal state untuk buat akun
 	let showCreateAccountModal = false;
@@ -40,6 +41,11 @@
 		confirmPassword = '';
 		createAccountError = '';
 	};
+
+	// Image handling
+	let imageLoadError = false;
+	let imageLoading = true;
+	let fotoKtpUrl = '';
 
 	// Fungsi untuk membuat akun
 	const createAccount = async () => {
@@ -73,7 +79,7 @@
 					password: accountPassword,
 					nama_lengkap: employee.nama_lengkap,
 					divisi: employee.divisi,
-					posisi_jabatan: employee.posisi_jabatan
+					jabatan: employee.jabatan
 				})
 			});
 
@@ -95,6 +101,63 @@
 		} finally {
 			isCreatingAccount = false;
 		}
+	};
+
+	// Fetch foto KTP langsung
+	async function fetchFotoKtp() {
+		if (!employee?.foto_ktp) {
+			imageLoading = false;
+			return;
+		}
+
+		try {
+			const directusUrl = 'https://directus.eltamaprimaindo.com';
+			const token = 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
+
+			// Buat URL untuk foto KTP
+			fotoKtpUrl = `${directusUrl}/assets/${employee.foto_ktp}?access_token=${token}`;
+
+			console.log('Foto KTP URL:', fotoKtpUrl);
+
+			// Test apakah gambar dapat diakses
+			const img = new Image();
+			img.onload = () => {
+				imageLoading = false;
+				imageLoadError = false;
+				console.log('Image loaded successfully');
+			};
+			img.onerror = () => {
+				imageLoading = false;
+				imageLoadError = true;
+				console.error('Failed to load image:', fotoKtpUrl);
+			};
+			img.src = fotoKtpUrl;
+		} catch (error) {
+			console.error('Error fetching foto KTP:', error);
+			imageLoading = false;
+			imageLoadError = true;
+		}
+	}
+
+	const handleImageLoad = () => {
+		imageLoading = false;
+		imageLoadError = false;
+		console.log('Image loaded successfully in img tag');
+	};
+
+	const handleImageError = (event: Event) => {
+		imageLoading = false;
+		imageLoadError = true;
+		const target = event.target as HTMLImageElement;
+		console.error('Failed to load image in img tag:', target.src);
+		console.error('Original foto_ktp:', employee?.foto_ktp);
+	};
+
+	// Retry image loading
+	const retryImageLoad = () => {
+		imageLoadError = false;
+		imageLoading = true;
+		fetchFotoKtp();
 	};
 
 	// Helper function for capitalization
@@ -258,6 +321,7 @@
 		setTimeout(() => {
 			loaded = true;
 		}, 100);
+		fetchFotoKtp();
 	});
 </script>
 
@@ -378,7 +442,6 @@
 										<span class="font-medium">{formatDivisi(employee.divisi) || '-'}</span>
 									</div>
 								</div>
-                
 							</div>
 						</div>
 					</div>
@@ -881,7 +944,7 @@
 										<p
 											class="font-semibold text-gray-900 transition-colors duration-200 group-hover:text-blue-600"
 										>
-											{formatPosisiJabatan(employee.posisi_jabatan) || '-'}
+											{formatPosisiJabatan(employee.jabatan) || '-'}
 										</p>
 									</div>
 
@@ -1334,24 +1397,6 @@
 										</div>
 
 										<div>
-											<div class="mb-1 text-sm font-medium text-gray-500">Role</div>
-											<span
-												class="inline-flex rounded-full px-3 py-1 text-sm font-medium
-                        {accountInfo.role === 'manager'
-													? 'bg-purple-100 text-purple-800'
-													: accountInfo.role === 'supervisor'
-														? 'bg-blue-100 text-blue-800'
-														: 'bg-gray-100 text-gray-800'}"
-											>
-												{accountInfo.role === 'manager'
-													? 'Manager'
-													: accountInfo.role === 'supervisor'
-														? 'Supervisor'
-														: 'Employee'}
-											</span>
-										</div>
-
-										<div>
 											<div class="mb-1 text-sm font-medium text-gray-500">Dibuat</div>
 											<p class="text-sm text-gray-900">
 												{formatDate(accountInfo.created_at) || '-'}
@@ -1462,18 +1507,100 @@
 									</p>
 								</div>
 
-								{#if employee.foto_ktp}
+								{#if employee?.foto_ktp}
+									<div>
+										<div class="mb-2 text-sm font-medium text-gray-500">Foto KTP</div>
+										<div
+											class="relative cursor-pointer overflow-hidden rounded-lg border border-gray-200"
+											on:click={() => (showImageModal = true)}
+										>
+											{#if imageLoading}
+												<div class="flex h-32 w-full items-center justify-center bg-gray-100">
+													<div class="flex items-center space-x-2">
+														<div
+															class="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"
+														></div>
+														<span class="text-sm text-gray-500">Memuat gambar...</span>
+													</div>
+												</div>
+											{:else if imageLoadError}
+												<div class="flex h-32 w-full items-center justify-center bg-red-50">
+													<div class="text-center">
+														<svg
+															class="mx-auto h-8 w-8 text-red-400"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+															/>
+														</svg>
+														<p class="mt-2 text-xs text-red-600">Gagal memuat gambar</p>
+														<button
+															on:click|stopPropagation={retryImageLoad}
+															class="mt-2 text-xs text-red-800 underline hover:text-red-900"
+														>
+															Coba lagi
+														</button>
+													</div>
+												</div>
+											{:else}
+												<div class="group relative">
+													<img
+														src={fotoKtpUrl}
+														alt="Foto KTP"
+														class="h-32 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+														on:load={handleImageLoad}
+														on:error={handleImageError}
+													/>
+													<div
+														class="bg-opacity-0 group-hover:bg-opacity-30 absolute inset-0 flex items-center justify-center bg-black transition-all duration-200"
+													>
+														<svg
+															class="h-6 w-6 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																stroke-linecap="round"
+																stroke-linejoin="round"
+																stroke-width="2"
+																d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+															/>
+														</svg>
+													</div>
+												</div>
+											{/if}
+										</div>
+										<p class="mt-2 text-xs text-gray-500">Klik untuk memperbesar</p>
+									</div>
+								{:else}
 									<div>
 										<div class="mb-2 text-sm font-medium text-gray-500">Foto KTP</div>
 										<div
 											class="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-100"
 										>
-											<img
-												src={employee.foto_ktp}
-												alt="Foto KTP"
-												class="max-h-full max-w-full rounded-lg object-contain"
-												on:error={() => {}}
-											/>
+											<div class="text-center">
+												<svg
+													class="mx-auto h-8 w-8 text-gray-400"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+													/>
+												</svg>
+												<p class="mt-2 text-xs text-gray-500">Tidak ada foto KTP</p>
+											</div>
 										</div>
 									</div>
 								{/if}
@@ -1732,6 +1859,36 @@
 					</form>
 				{/if}
 			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Modal untuk gambar yang diperbesar -->
+{#if showImageModal}
+	<div
+		class="bg-opacity-75 fixed inset-0 z-50 flex items-center justify-center bg-black p-4"
+		on:click={() => (showImageModal = false)}
+	>
+		<div class="relative max-h-full max-w-full">
+			<button
+				on:click={() => (showImageModal = false)}
+				class="absolute -top-4 -right-4 z-10 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100"
+			>
+				<svg class="h-6 w-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M6 18L18 6M6 6l12 12"
+					/>
+				</svg>
+			</button>
+			<img
+				src={fotoKtpUrl}
+				alt="Foto KTP - Diperbesar"
+				class="max-h-full max-w-full rounded-lg object-contain"
+				on:click|stopPropagation
+			/>
 		</div>
 	</div>
 {/if}

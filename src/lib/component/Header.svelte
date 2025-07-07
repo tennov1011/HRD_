@@ -1,58 +1,173 @@
 <script>
-	let showLogoutModal = false;
-	let showProfileDropdown = false;
-	export let employee = null;
+    import { goto } from '$app/navigation';
+    import { browser } from '$app/environment';
+    import { onMount, onDestroy } from 'svelte';
 
-	function openLogoutModal() {
-		showLogoutModal = true;
-		showProfileDropdown = false;
-	}
+    let showLogoutModal = false;
+    let showProfileDropdown = false;
+    let isLoggingOut = false;
+    export let employee = null;
 
-	function closeLogoutModal() {
-		showLogoutModal = false;
-	}
+    function openLogoutModal() {
+        showLogoutModal = true;
+        showProfileDropdown = false;
+    }
 
-	function toggleProfileDropdown() {
-		showProfileDropdown = !showProfileDropdown;
-	}
+    function closeLogoutModal() {
+        showLogoutModal = false;
+    }
 
-	async function handleLogout() {
-		showLogoutModal = false;
-		if (typeof localStorage !== 'undefined') {
-			localStorage.removeItem('directus_token');
-		}
-		try {
-			const authModule = await import('$lib/services/firebaseConfig');
-			if (authModule.logout) {
-				await authModule.logout();
-			}
-		} catch (e) {
-			console.warn('Logout error:', e);
-		}
-		window.location.href = '/login';
-	}
+    function toggleProfileDropdown() {
+        showProfileDropdown = !showProfileDropdown;
+    }
 
-	// Get current time
-	let currentTime = new Date();
-	setInterval(() => {
-		currentTime = new Date();
-	}, 1000);
+    // Handle escape key to close modal
+    function handleKeydown(event) {
+        if (event.key === 'Escape' && showLogoutModal) {
+            closeLogoutModal();
+        }
+    }
 
-	function formatTime(date) {
-		return date.toLocaleTimeString('id-ID', {
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		});
-	}
+    async function handleLogout() {
+        if (isLoggingOut) return; // Prevent multiple logout attempts
+        
+        isLoggingOut = true;
+        showLogoutModal = false;
+        
+        try {
+            console.log('Starting logout process...');
+            
+            // 1. Clear localStorage
+            if (browser && typeof localStorage !== 'undefined') {
+                localStorage.removeItem('directus_token');
+                localStorage.removeItem('user_session');
+                localStorage.removeItem('employee_data');
+                localStorage.removeItem('auth_token');
+                // Clear any other auth-related items
+                localStorage.clear();
+                console.log('localStorage cleared');
+            }
+            
+            // 2. Clear sessionStorage
+            if (browser && typeof sessionStorage !== 'undefined') {
+                sessionStorage.clear();
+                console.log('sessionStorage cleared');
+            }
+            
+            // 3. Clear cookies (if any)
+            if (browser && typeof document !== 'undefined') {
+                document.cookie.split(";").forEach(function(c) { 
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+                });
+                console.log('Cookies cleared');
+            }
+            
+            // 4. Try to call Firebase logout (if exists)
+            try {
+                const authModule = await import('$lib/services/firebaseConfig');
+                if (authModule.logout) {
+                    await authModule.logout();
+                    console.log('Firebase logout successful');
+                }
+            } catch (e) {
+                console.warn('Firebase logout error (this is okay if not using Firebase):', e);
+            }
+            
+            // 5. Call server logout endpoint to invalidate session
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+                console.log('Server logout called');
+            } catch (e) {
+                console.warn('Server logout error:', e);
+            }
+            
+            // 6. Clear browser history to prevent back navigation
+            if (browser) {
+                // Replace current history entry
+                window.history.replaceState(null, '', '/login');
+                
+                // Clear forward/back history
+                window.history.pushState(null, '', '/login');
+                
+                // Prevent back button
+                window.addEventListener('popstate', function(event) {
+                    window.history.pushState(null, '', '/login');
+                });
+            }
+            
+            console.log('Logout process completed, redirecting to login...');
+            
+            // 7. Redirect to login page
+            if (browser) {
+                // Force hard redirect to ensure complete session cleanup
+                window.location.href = '/login';
+                window.location.replace('/login');
+            } else {
+                goto('/login', { replaceState: true });
+            }
+            
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Force redirect even if there's an error
+            if (browser) {
+                window.location.href = '/login';
+            }
+        } finally {
+            isLoggingOut = false;
+        }
+    }
 
-	function getGreeting() {
-		const hour = currentTime.getHours();
-		if (hour < 12) return 'Selamat Pagi';
-		if (hour < 15) return 'Selamat Siang';
-		if (hour < 18) return 'Selamat Sore';
-		return 'Selamat Malam';
-	}
+    // Get current time
+    let currentTime = new Date();
+    setInterval(() => {
+        currentTime = new Date();
+    }, 1000);
+
+    function formatTime(date) {
+        return date.toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    function getGreeting() {
+        const hour = currentTime.getHours();
+        if (hour < 12) return 'Selamat Pagi';
+        if (hour < 15) return 'Selamat Siang';
+        if (hour < 18) return 'Selamat Sore';
+        return 'Selamat Malam';
+    }
+
+    // Global keyboard event listener
+    onMount(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && showLogoutModal) {
+                closeLogoutModal();
+            }
+        };
+        
+        if (browser) {
+            document.addEventListener('keydown', handleEscape);
+        }
+        
+        return () => {
+            if (browser) {
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+    });
+
+    onDestroy(() => {
+        if (browser) {
+            document.removeEventListener('keydown', handleKeydown);
+        }
+    });
 </script>
 
 <svelte:head>
@@ -168,50 +283,6 @@
 
 							<!-- Menu Items -->
 							<div class="py-2">
-								<a
-									href="/profile"
-									class="flex items-center space-x-3 px-4 py-3 transition-colors hover:bg-gray-50"
-								>
-									<svg
-										class="h-4 w-4 text-gray-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-										/>
-									</svg>
-									<span class="text-sm text-gray-700">Profile Saya</span>
-								</a>
-								<a
-									href="/settings"
-									class="flex items-center space-x-3 px-4 py-3 transition-colors hover:bg-gray-50"
-								>
-									<svg
-										class="h-4 w-4 text-gray-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-										/>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-										/>
-									</svg>
-									<span class="text-sm text-gray-700">Pengaturan</span>
-								</a>
 								<div class="my-1 border-t border-gray-100"></div>
 								<button
 									on:click={openLogoutModal}
@@ -243,50 +314,69 @@
 
 <!-- Logout Modal dengan desain yang lebih modern -->
 {#if showLogoutModal}
-	<div
-		class="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black backdrop-blur-sm"
-	>
-		<div class="mx-4 w-full max-w-md transform rounded-2xl bg-white p-8 shadow-2xl transition-all">
-			<!-- Header -->
-			<div class="mb-6 text-center">
-				<div
-					class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100"
-				>
-					<svg class="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-						/>
-					</svg>
-				</div>
-				<h3 class="mb-2 text-xl font-bold text-gray-800">Konfirmasi Logout</h3>
-				<p class="text-gray-600">Apakah Anda yakin ingin keluar dari sistem?</p>
-			</div>
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
+        on:click={closeLogoutModal}
+        on:keydown={handleKeydown}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="logout-modal-title"
+        aria-describedby="logout-modal-description"
+    >
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div 
+            class="mx-4 w-full max-w-md transform rounded-2xl bg-white p-8 shadow-2xl transition-all"
+            on:click|stopPropagation
+            role="document"
+        >
+            <!-- Header -->
+            <div class="mb-6 text-center">
+                <div
+                    class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100"
+                >
+                    <svg class="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
+                    </svg>
+                </div>
+                <h3 id="logout-modal-title" class="mb-2 text-xl font-bold text-gray-800">Konfirmasi Logout</h3>
+                <p id="logout-modal-description" class="text-gray-600">Apakah Anda yakin ingin keluar dari sistem?</p>
+            </div>
 
-			<!-- Action Buttons -->
-			<div class="flex space-x-3">
-				<button
-					on:click={closeLogoutModal}
-					class="flex-1 rounded-xl bg-gray-100 px-6 py-3 font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-200 focus:ring-4 focus:ring-gray-300 focus:outline-none"
-				>
-					Batal
-				</button>
-				<button
-					on:click={handleLogout}
-					class="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:from-red-600 hover:to-red-700 focus:ring-4 focus:ring-red-300 focus:outline-none"
-				>
-					Ya, Logout
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<!-- Click outside to close dropdown -->
-{#if showProfileDropdown}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<div class="fixed inset-0 z-40" on:click={() => (showProfileDropdown = false)}></div>
+            <!-- Action Buttons -->
+            <div class="flex space-x-3">
+                <button
+                    on:click={closeLogoutModal}
+                    disabled={isLoggingOut}
+                    class="flex-1 rounded-xl bg-gray-100 px-6 py-3 font-semibold text-gray-700 transition-all duration-200 hover:bg-gray-200 focus:ring-4 focus:ring-gray-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Batal
+                </button>
+                <button
+                    on:click={handleLogout}
+                    disabled={isLoggingOut}
+                    class="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:from-red-600 hover:to-red-700 focus:ring-4 focus:ring-red-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {#if isLoggingOut}
+                        <div class="flex items-center justify-center">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Logging out...
+                        </div>
+                    {:else}
+                        Ya, Logout
+                    {/if}
+                </button>
+            </div>
+        </div>
+    </div>
 {/if}

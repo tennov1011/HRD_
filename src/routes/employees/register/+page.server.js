@@ -29,7 +29,7 @@ export const actions = {
       status_kerja: String(data.get('status_kerja') || ''),
       tanggal_masuk: String(data.get('tanggal_masuk') || ''),
       divisi: String(data.get('divisi') || ''),
-      posisi_jabatan: String(data.get('posisi_jabatan') || ''),
+      jabatan: String(data.get('jabatan') || ''),
       email: String(data.get('email') || '').trim().toLowerCase(),
       kontak_darurat: String(data.get('kontak_darurat') || '').trim(),
       no_ktp: String(data.get('no_ktp') || '').trim(),
@@ -75,8 +75,8 @@ export const actions = {
 
     // Validasi posisi jabatan
     const validPositions = ['staff', 'supervisor', 'manager', 'senior_manager', 'director', 'gm', 'ceo'];
-    if (!employeeData.posisi_jabatan || !validPositions.includes(employeeData.posisi_jabatan)) {
-      errors.posisi_jabatan = 'Posisi jabatan harus dipilih';
+    if (!employeeData.jabatan || !validPositions.includes(employeeData.jabatan)) {
+      errors.jabatan = 'Posisi jabatan harus dipilih';
     }
     
     // Validasi email
@@ -138,7 +138,7 @@ export const actions = {
       status_kerja: employeeData.status_kerja,
       tanggal_masuk: employeeData.tanggal_masuk, // tetap sebagai date
       divisi: employeeData.divisi,
-      posisi_jabatan: employeeData.posisi_jabatan,
+      jabatan: employeeData.jabatan,
       email: employeeData.email,
       kontak_darurat: employeeData.kontak_darurat || null,
       status_hubungan: employeeData.status_hubungan || null,

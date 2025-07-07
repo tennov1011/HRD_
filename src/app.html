@@ -1,12 +1,31 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		%sveltekit.head%
-	</head>
-	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
-	</body>
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    %sveltekit.head%
+</head>
+<body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+    
+    <script>
+        // Prevent back navigation after logout
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // Page was loaded from cache, check if user is still authenticated
+                if (window.location.pathname !== '/login' && !localStorage.getItem('directus_token')) {
+                    window.location.href = '/login';
+                }
+            }
+        });
+        
+        // Prevent back button on login page
+        if (window.location.pathname === '/login') {
+            window.addEventListener('popstate', function(event) {
+                window.history.pushState(null, '', '/login');
+            });
+        }
+    </script>
+</body>
 </html>
