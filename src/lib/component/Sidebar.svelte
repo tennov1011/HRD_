@@ -47,13 +47,13 @@
 			icon: '📂',
 			hasDropdown: true,
 			subMenus: [
+				{ label: 'Daftar Master Data', href: '/masterdata', icon: '📋' },
 				{ label: 'Shift Kerja', href: '/masterdata/shift', icon: '⏰' },
 				{ label: 'Divisi', href: '/masterdata/divisi', icon: '🏢' },
 				{ label: 'Jabatan', href: '/masterdata/jabatan', icon: '👔' },
 				{ label: 'Lokasi Presensi', href: '/masterdata/lokasi-absen', icon: '📍' }
 			]
 		},
-		{ label: 'Bonus', href: '/bonuses', icon: '💰' },
 		{ label: 'Rekrutmen', href: '/recruitment', icon: '👔' },
 		{ label: 'Dokumen', href: '/documents', icon: '📄' },
 		{ label: 'Pengaturan', href: '/settings', icon: '⚙️' }
@@ -65,13 +65,26 @@
 	/** @type {Record<number, boolean>} */
 	let expandedMenus = {};
 
-	// Auto-expand dropdown if current path matches submenu
+	// Initialize and manage dropdown state
 	$: {
+		const newExpandedMenus = { ...expandedMenus };
+		let hasChanges = false;
+
 		menuItems.forEach((item, index) => {
-			if (item.hasDropdown && isSubmenuActive(item.subMenus)) {
-				expandedMenus[index] = true;
+			if (item.hasDropdown) {
+				const shouldExpand = isSubmenuActive(item.subMenus);
+
+				// Only update if there's a change to avoid infinite reactivity
+				if (shouldExpand && !newExpandedMenus[index]) {
+					newExpandedMenus[index] = true;
+					hasChanges = true;
+				}
 			}
 		});
+
+		if (hasChanges) {
+			expandedMenus = newExpandedMenus;
+		}
 	}
 
 	/**
@@ -79,7 +92,30 @@
 	 * @param {number} index
 	 */
 	function toggleDropdown(index) {
-		expandedMenus[index] = !expandedMenus[index];
+		expandedMenus = {
+			...expandedMenus,
+			[index]: !expandedMenus[index]
+		};
+	}
+
+	/**
+	 * Close all dropdowns
+	 */
+	function closeAllDropdowns() {
+		expandedMenus = {};
+	}
+
+	/**
+	 * Handle click outside sidebar to close dropdowns
+	 * @param {Event} event
+	 */
+	function handleClickOutside(event) {
+		if (event.target && event.target instanceof Element) {
+			const sidebar = event.target.closest('.sidebar');
+			if (!sidebar) {
+				closeAllDropdowns();
+			}
+		}
 	}
 
 	/**
@@ -88,9 +124,24 @@
 	 * @returns {boolean}
 	 */
 	function isSubmenuActive(subMenus) {
-		return (
-			subMenus?.some((sub) => currentPath === sub.href || currentPath.startsWith(sub.href)) || false
-		);
+		if (!subMenus || !Array.isArray(subMenus)) return false;
+
+		return subMenus.some((sub) => {
+			if (!sub.href) return false;
+
+			// Exact match
+			if (currentPath === sub.href) return true;
+
+			// Check if current path starts with submenu href (for nested routes)
+			// but make sure it's not a false positive
+			if (sub.href !== '/' && currentPath.startsWith(sub.href)) {
+				// Additional check to avoid false positives
+				const pathAfterHref = currentPath.substring(sub.href.length);
+				return pathAfterHref === '' || pathAfterHref.startsWith('/');
+			}
+
+			return false;
+		});
 	}
 </script>
 
@@ -117,6 +168,15 @@
 							<button
 								class="nav-link dropdown-toggle {isSubmenuActive(item.subMenus) ? 'active' : ''}"
 								on:click={() => toggleDropdown(index)}
+								on:keydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										toggleDropdown(index);
+									}
+								}}
+								aria-expanded={expandedMenus[index] || false}
+								aria-controls="submenu-{index}"
+								type="button"
 							>
 								<span class="nav-icon">{item.icon}</span>
 								<span class="nav-label">{item.label}</span>
@@ -126,6 +186,7 @@
 							{#if expandedMenus[index]}
 								<div
 									class="submenu-container"
+									id="submenu-{index}"
 									transition:slide={{ duration: 300, easing: cubicOut }}
 								>
 									<ul class="submenu">
@@ -245,6 +306,11 @@
 		transform: translateX(4px);
 	}
 
+	.nav-link:focus {
+		outline: 2px solid #3b82f6;
+		outline-offset: 2px;
+	}
+
 	.nav-link.active {
 		background: linear-gradient(90deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
 		color: #60a5fa;
@@ -282,12 +348,29 @@
 		border: none;
 		width: 100%;
 		cursor: pointer;
+		font-family: inherit;
+		text-align: left;
+		/* Inherit all nav-link styles */
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 16px;
+		border-radius: 12px;
+		text-decoration: none;
+		color: #cbd5e1;
+		transition: all 0.2s ease;
+		position: relative;
 	}
 
 	.dropdown-toggle:hover {
 		background: rgba(71, 85, 105, 0.5);
 		color: white;
 		transform: translateX(4px);
+	}
+
+	.dropdown-toggle:focus {
+		outline: 2px solid #3b82f6;
+		outline-offset: 2px;
 	}
 
 	.dropdown-toggle.active {
@@ -432,46 +515,6 @@
 			transform: scale(1.2);
 			opacity: 0.8;
 		}
-	}
-
-	.sidebar-footer {
-		padding: 16px 20px;
-		border-top: 1px solid rgba(255, 255, 255, 0.1);
-		background: rgba(15, 23, 42, 0.8);
-	}
-
-	.user-info {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-
-	.user-avatar {
-		width: 32px;
-		height: 32px;
-		background: #475569;
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 14px;
-	}
-
-	.user-details {
-		flex: 1;
-	}
-
-	.user-name {
-		margin: 0;
-		font-size: 13px;
-		font-weight: 500;
-		color: #e2e8f0;
-	}
-
-	.user-email {
-		margin: 0;
-		font-size: 11px;
-		color: #64748b;
 	}
 
 	/* Responsive */

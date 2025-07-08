@@ -57,7 +57,7 @@
 
 <div class="bg-gray-50 min-h-screen">
   <!-- Navigation Tabs -->
-  <div class="bg-white shadow-sm border-b sticky top-0 z-10">
+  <!-- <div class="bg-white shadow-sm border-b sticky top-0 z-10">
     <div class="container mx-auto px-4">
       <nav class="flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-hide">
         {#key $page.url.pathname}
@@ -77,7 +77,7 @@
         {/key}
       </nav>
     </div>
-  </div>
+  </div> -->
 
   <!-- Page Content -->
   <main>

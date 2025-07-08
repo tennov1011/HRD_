@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { MonthlyAttendanceService } from '$lib/services/monthlyAttendanceService.js';
+	import * as XLSX from 'xlsx';
 
 	// State management
 	let loading = true;
@@ -149,9 +150,101 @@
 		return 'poor';
 	}
 
-	function exportToCSV() {
-		if (reportData && period) {
-			MonthlyAttendanceService.exportToCSV(reportData, period);
+	function exportToExcel() {
+		if (!reportData || !period) {
+			alert('Tidak ada data untuk diekspor');
+			return;
+		}
+
+		try {
+			// Get statistics data (use fallback values if not available)
+			const stats = reportData.statistics || {};
+			const totalEmployees = stats.totalEmployees || filteredEmployees.length;
+			const averageAttendanceRate = stats.averageAttendanceRate || 0;
+			const workingDays = stats.workingDays || period.workingDays || 22;
+
+			// Prepare summary data
+			const summaryData = [
+				['LAPORAN KEHADIRAN BULANAN'],
+				[''],
+				['Periode', `${period.monthName} ${period.year}`],
+				['Total Karyawan', totalEmployees],
+				['Rata-rata Kehadiran', `${averageAttendanceRate.toFixed(1)}%`],
+				['Total Hari Kerja', workingDays],
+				['Total Hadir', stats.totalPresent || 0],
+				['Total Terlambat', stats.totalLate || 0],
+				['Total Tidak Hadir', stats.totalAbsent || 0],
+				[''],
+				['']
+			];
+
+			// Prepare employee details data
+			const employeeData = filteredEmployees.map((employee) => {
+				// Handle both old and new data structure
+				const summary = employee.summary || employee;
+
+				return {
+					'Nama Karyawan': employee.nama || '',
+					Email: employee.email || '',
+					'Hari Hadir': summary.presentDays || 0,
+					'Hari Terlambat': summary.lateDays || 0,
+					'Hari Tidak Hadir': summary.absentDays || 0,
+					'Total Menit Terlambat': summary.totalLateMinutes || 0,
+					'Rata-rata Menit Terlambat': summary.averageLateMinutes || 0,
+					'Tingkat Kehadiran (%)': summary.attendanceRate
+						? summary.attendanceRate.toFixed(1) + '%'
+						: '0%',
+					Status:
+						(summary.attendanceRate || 0) >= 90
+							? 'Baik'
+							: (summary.attendanceRate || 0) >= 75
+								? 'Cukup'
+								: 'Perlu Perbaikan'
+				};
+			});
+
+			// Create workbook
+			const wb = XLSX.utils.book_new();
+
+			// Create summary worksheet
+			const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+
+			// Set column widths for summary
+			summaryWs['!cols'] = [{ width: 25 }, { width: 30 }];
+
+			// Merge cells for title
+			summaryWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+
+			// Create employee details worksheet
+			const employeeWs = XLSX.utils.json_to_sheet(employeeData);
+
+			// Set column widths for employee data
+			employeeWs['!cols'] = [
+				{ width: 25 }, // Nama Karyawan
+				{ width: 30 }, // Email
+				{ width: 12 }, // Hari Hadir
+				{ width: 15 }, // Hari Terlambat
+				{ width: 18 }, // Hari Tidak Hadir
+				{ width: 20 }, // Total Menit Terlambat
+				{ width: 22 }, // Rata-rata Menit Terlambat
+				{ width: 20 }, // Tingkat Kehadiran
+				{ width: 18 } // Status
+			];
+
+			// Add worksheets to workbook
+			XLSX.utils.book_append_sheet(wb, summaryWs, 'Ringkasan');
+			XLSX.utils.book_append_sheet(wb, employeeWs, 'Detail Karyawan');
+
+			// Generate filename
+			const fileName = `Laporan_Kehadiran_${period.monthName}_${period.year}.xlsx`;
+
+			// Write and download file
+			XLSX.writeFile(wb, fileName);
+
+			console.log('Excel file exported successfully:', fileName);
+		} catch (error) {
+			console.error('Error exporting to Excel:', error);
+			alert('Terjadi kesalahan saat mengekspor data ke Excel');
 		}
 	}
 
@@ -311,7 +404,7 @@
 			</div>
 
 			<div class="action-buttons">
-				<button class="btn btn-secondary" on:click={exportToCSV}> 📊 Export CSV </button>
+				<button class="btn btn-secondary" on:click={exportToExcel}> 📗 Export Excel </button>
 			</div>
 		</div>
 
@@ -970,162 +1063,163 @@
 	}
 
 	/* Cards View */
-/* Cards Container */
-.cards-container {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-	gap: 20px;
-	margin-bottom: 24px;
-	padding: 10px;
-}
+	/* Cards Container */
+	.cards-container {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+		gap: 20px;
+		margin-bottom: 24px;
+		padding: 10px;
+	}
 
-/* Card Styling */
-.employee-card {
-	background: #ffffff;
-	border-radius: 16px;
-	padding: 20px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-	transition: transform 0.2s ease, box-shadow 0.2s ease;
-	border: 1px solid #e2e8f0;
-}
+	/* Card Styling */
+	.employee-card {
+		background: #ffffff;
+		border-radius: 16px;
+		padding: 20px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+		transition:
+			transform 0.2s ease,
+			box-shadow 0.2s ease;
+		border: 1px solid #e2e8f0;
+	}
 
-.employee-card:hover {
-	transform: translateY(-4px);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-}
+	.employee-card:hover {
+		transform: translateY(-4px);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+	}
 
-/* Header */
-.card-header {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-	margin-bottom: 20px;
-	position: relative;
-}
+	/* Header */
+	.card-header {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 20px;
+		position: relative;
+	}
 
-.employee-avatar.large {
-	width: 48px;
-	height: 48px;
-	border-radius: 50%;
-	background-color: #3b82f6;
-	color: #fff;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 18px;
-	font-weight: 600;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
+	.employee-avatar.large {
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		background-color: #3b82f6;
+		color: #fff;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 18px;
+		font-weight: 600;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+	}
 
-.card-header .employee-info {
-	flex: 1;
-}
+	.card-header .employee-info {
+		flex: 1;
+	}
 
-.card-header h3 {
-	margin: 0;
-	font-size: 18px;
-	font-weight: 600;
-	color: #1e293b;
-	line-height: 1.2;
-}
+	.card-header h3 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 600;
+		color: #1e293b;
+		line-height: 1.2;
+	}
 
-.card-header p {
-	margin: 4px 0 0 0;
-	font-size: 14px;
-	color: #64748b;
-}
+	.card-header p {
+		margin: 4px 0 0 0;
+		font-size: 14px;
+		color: #64748b;
+	}
 
-.employee-id {
-	display: inline-block;
-	margin-top: 4px;
-	font-size: 12px;
-	color: #94a3b8;
-	background: #f1f5f9;
-	padding: 2px 8px;
-	border-radius: 6px;
-}
+	.employee-id {
+		display: inline-block;
+		margin-top: 4px;
+		font-size: 12px;
+		color: #94a3b8;
+		background: #f1f5f9;
+		padding: 2px 8px;
+		border-radius: 6px;
+	}
 
-/* Badge */
-.attendance-rate-badge {
-	position: absolute;
-	top: 0;
-	right: 0;
-	padding: 6px 12px;
-	border-radius: 20px;
-	font-weight: 600;
-	font-size: 13px;
-	color: #fff;
-	background-color: #22c55e;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
+	/* Badge */
+	.attendance-rate-badge {
+		position: absolute;
+		top: 0;
+		right: 0;
+		padding: 6px 12px;
+		border-radius: 20px;
+		font-weight: 600;
+		font-size: 13px;
+		color: #fff;
+		background-color: #22c55e;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
 
-/* Stats Section */
-.card-stats {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-	gap: 12px;
-}
+	/* Stats Section */
+	.card-stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: 12px;
+	}
 
-.stat-item {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 10px;
-	border-radius: 10px;
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
-	transition: background-color 0.2s ease;
-}
+	.stat-item {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 10px;
+		border-radius: 10px;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		transition: background-color 0.2s ease;
+	}
 
-.stat-item.present {
-	background: #ecfdf5;
-	border-color: #d1fae5;
-}
+	.stat-item.present {
+		background: #ecfdf5;
+		border-color: #d1fae5;
+	}
 
-.stat-item.late {
-	background: #fefce8;
-	border-color: #fef3c7;
-}
+	.stat-item.late {
+		background: #fefce8;
+		border-color: #fef3c7;
+	}
 
-.stat-item.absent {
-	background: #fef2f2;
-	border-color: #fecaca;
-}
+	.stat-item.absent {
+		background: #fef2f2;
+		border-color: #fecaca;
+	}
 
-.stat-item.late-avg {
-	background: #f8fafc;
-	border-color: #e2e8f0;
-}
+	.stat-item.late-avg {
+		background: #f8fafc;
+		border-color: #e2e8f0;
+	}
 
-.stat-icon {
-	font-size: 18px;
-	width: 28px;
-	height: 28px;
-	background: #e2e8f0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border-radius: 50%;
-	color: #334155;
-}
+	.stat-icon {
+		font-size: 18px;
+		width: 28px;
+		height: 28px;
+		background: #e2e8f0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		color: #334155;
+	}
 
-.stat-info {
-	flex: 1;
-}
+	.stat-info {
+		flex: 1;
+	}
 
-.stat-item .stat-value {
-	font-size: 15px;
-	font-weight: 600;
-	color: #1e293b;
-	display: block;
-}
+	.stat-item .stat-value {
+		font-size: 15px;
+		font-weight: 600;
+		color: #1e293b;
+		display: block;
+	}
 
-.stat-item .stat-label {
-	font-size: 12px;
-	color: #64748b;
-	margin-top: 2px;
-}
-
+	.stat-item .stat-label {
+		font-size: 12px;
+		color: #64748b;
+		margin-top: 2px;
+	}
 
 	/* Pagination */
 	.pagination {

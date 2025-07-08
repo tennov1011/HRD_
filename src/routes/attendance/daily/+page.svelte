@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { AttendanceService } from '$lib/services/attendanceService.js';
+	import * as XLSX from 'xlsx';
 
 	let attendanceData = [];
 	let loading = true;
@@ -151,9 +152,64 @@
 		}
 	}
 
-	function exportToCSV() {
-		// Implementation for CSV export
-		console.log('Export to CSV functionality');
+	function exportToExcel() {
+		try {
+			// Prepare data for export
+			const exportData = filteredData.map((item) => ({
+				Nama: item.nama || '',
+				Email: item.email || '',
+				Tanggal: item.tanggal || '',
+				'Waktu Masuk': item.waktu_masuk
+					? new Date(item.waktu_masuk).toLocaleTimeString('id-ID', {
+							hour: '2-digit',
+							minute: '2-digit'
+						})
+					: '',
+				'Waktu Keluar': item.waktu_keluar
+					? new Date(item.waktu_keluar).toLocaleTimeString('id-ID', {
+							hour: '2-digit',
+							minute: '2-digit'
+						})
+					: '',
+				Lokasi: item.lokasi || '',
+				Status: item.terlambat ? 'Terlambat' : 'Tepat Waktu',
+				'Menit Keterlambatan': item.menit_keterlambatan || 0,
+				Keterangan: item.keterangan || ''
+			}));
+
+			// Create workbook and worksheet
+			const wb = XLSX.utils.book_new();
+			const ws = XLSX.utils.json_to_sheet(exportData);
+
+			// Set column widths
+			const colWidths = [
+				{ width: 20 }, // Nama
+				{ width: 25 }, // Email
+				{ width: 12 }, // Tanggal
+				{ width: 12 }, // Waktu Masuk
+				{ width: 12 }, // Waktu Keluar
+				{ width: 15 }, // Lokasi
+				{ width: 15 }, // Status
+				{ width: 18 }, // Menit Keterlambatan
+				{ width: 25 } // Keterangan
+			];
+			ws['!cols'] = colWidths;
+
+			// Add worksheet to workbook
+			XLSX.utils.book_append_sheet(wb, ws, 'Presensi Harian');
+
+			// Generate filename with current date
+			const currentDate = selectedDate || new Date().toISOString().split('T')[0];
+			const fileName = `Presensi_Harian_${currentDate}.xlsx`;
+
+			// Write and download file
+			XLSX.writeFile(wb, fileName);
+
+			console.log('Excel file exported successfully:', fileName);
+		} catch (error) {
+			console.error('Error exporting to Excel:', error);
+			alert('Terjadi kesalahan saat mengekspor data ke Excel');
+		}
 	}
 
 	function refreshData() {
@@ -446,9 +502,9 @@
 			<p>Kelola dan monitor kehadiran karyawan harian</p>
 		</div>
 		<div class="header-actions">
-			<button class="btn btn-secondary" on:click={exportToCSV}> 📊 Export CSV </button>
-			<button class="btn btn-secondary" on:click={testTimeConversion}> 🔍 Test Time </button>
-			<button class="btn btn-secondary" on:click={testDirectusConnection}> 🔗 Test API </button>
+			<button class="btn btn-secondary" on:click={exportToExcel}>📗 Export Excel </button>
+			<!-- <button class="btn btn-secondary" on:click={testTimeConversion}> 🔍 Test Time </button> -->
+			<!-- <button class="btn btn-secondary" on:click={testDirectusConnection}> 🔗 Test API </button> -->
 			<button class="btn btn-primary" on:click={refreshData}> 🔄 Refresh </button>
 		</div>
 	</div>

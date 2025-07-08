@@ -248,9 +248,9 @@
 			</div>
 		</div>
 
-		<div class="action-buttons">
+		<!-- <div class="action-buttons">
 			<button class="btn btn-primary"> ➕ Tambah Lembur </button>
-		</div>
+		</div> -->
 	</div>
 
 	<!-- Connection Status -->
