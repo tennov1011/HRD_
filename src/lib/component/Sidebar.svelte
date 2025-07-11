@@ -54,9 +54,18 @@
 				{ label: 'Lokasi Presensi', href: '/masterdata/lokasi-absen', icon: '📍' }
 			]
 		},
-		{ label: 'Rekrutmen', href: '/recruitment', icon: '👔' },
-		{ label: 'Dokumen', href: '/documents', icon: '📄' },
-		{ label: 'Pengaturan', href: '/settings', icon: '⚙️' }
+		{ 
+			label: 'Rekrutmen',
+			hasDropdown: true,
+			icon: '📝',
+			subMenus: [
+				{ label: 'Daftar Lowongan', href: '/recruitment', icon: '📢' },
+				{ label: 'Detail Lowongan', href: '/recruitment/applications', icon: '👤' },
+				{ label: 'Tambah Lowongan', href: '/recruitment/add', icon: '➕' },
+				{ label: 'Daftar Pelamar', href: '/recruitment/candidates', icon: '👥' }
+			]
+		},
+		{ label: 'Dokumen', href: '/documents', icon: '📄' }
 	];
 
 	$: currentPath = $page.url.pathname;
