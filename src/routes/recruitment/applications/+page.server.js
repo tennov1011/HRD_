@@ -16,6 +16,27 @@ export async function load({ url }) {
             // If no job ID, return list of all job postings
             const jobPostings = await recruitmentService.getAllJobPostings();
             
+            // Jika ada job postings, ambil jumlah pelamar untuk masing-masing lowongan
+            if (jobPostings?.data && jobPostings.data.length > 0) {
+                // Ambil semua pelamar
+                const allApplicantsResponse = await applicantService.request('/items/job_applications');
+                const allApplicants = allApplicantsResponse?.data || [];
+                
+                // Hitung jumlah pelamar untuk setiap lowongan
+                jobPostings.data = jobPostings.data.map(job => {
+                    // Hitung pelamar yang melamar untuk lowongan ini
+                    const applicantCount = allApplicants.filter(
+                        applicant => String(applicant.appliedJobId) === String(job.id)
+                    ).length;
+                    
+                    // Tambahkan jumlah pelamar ke objek lowongan
+                    return {
+                        ...job,
+                        applicantCount
+                    };
+                });
+            }
+            
             return {
                 jobPostings: jobPostings?.data || [],
                 selectedJob: null,
@@ -49,8 +70,12 @@ export async function load({ url }) {
             }
         }
         
+        // Tambahkan jumlah pelamar ke objek lowongan yang dipilih
+        const selectedJob = jobResponse.data;
+        selectedJob.applicantCount = (applicationsResponse?.data || []).length;
+        
         return {
-            selectedJob: jobResponse.data,
+            selectedJob,
             applications: applicationsResponse?.data || [],
             applicant,
             supportingDocuments
@@ -90,6 +115,7 @@ export const actions = {
                 'ditolak': 'rejected'
             };
             
+            // @ts-ignore - Mengabaikan TypeScript error untuk statusMap
             const dbStatus = statusMap[String(status)] || 'pending';
             
             await applicantService.updateApplicantStatus(String(id), dbStatus);
@@ -131,6 +157,7 @@ export const actions = {
                 });
             }
             
+            // @ts-ignore - Mengabaikan TypeScript error untuk addSupportingDocument
             await applicantService.addSupportingDocument(
                 String(applicantId),
                 file,

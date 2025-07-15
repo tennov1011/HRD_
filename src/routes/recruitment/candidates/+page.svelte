@@ -116,17 +116,13 @@
     // Function to get status badge color
     function getStatusClass(status) {
         switch (status) {
-            case 'pending':
+            case 'Diproses':
                 return 'bg-yellow-100 text-yellow-800';
-            case 'reviewed':
-                return 'bg-blue-100 text-blue-800';
-            case 'interview':
+            case 'Interview':
                 return 'bg-purple-100 text-purple-800';
-            case 'test':
-                return 'bg-indigo-100 text-indigo-800';
-            case 'accepted':
+            case 'Lolos':
                 return 'bg-green-100 text-green-800';
-            case 'rejected':
+            case 'Ditolak':
                 return 'bg-red-100 text-red-800';
             default:
                 return 'bg-gray-100 text-gray-800';
@@ -190,12 +186,10 @@
             on:change={handleStatusFilterChange}
         >
             <option value="">Status</option>
-            <option value="pending">Pending</option>
-            <option value="reviewed">Reviewed</option>
-            <option value="interview">Interview</option>
-            <option value="test">Test</option>
-            <option value="accepted">Accepted</option>
-            <option value="rejected">Rejected</option>
+            <option value="Diproses">Diproses</option>
+            <option value="Interview">Interview</option>
+            <option value="Lolos">Lolos</option>
+            <option value="Ditolak">Ditolak</option>
         </select>
         
         <!-- New source filter -->
@@ -291,7 +285,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {getStatusClass(applicant.applicationStatus)}">
-                                    {applicant.applicationStatus || 'pending'}
+                                    {applicant.applicationStatus || 'Diproses'}
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

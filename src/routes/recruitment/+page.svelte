@@ -7,17 +7,27 @@
   
   /** @type {import('./$types').PageData} */
   export let data;
+  /** @type {import('./$types').ActionData} */
+  export let form;
   
   // Filter state
   let showActive = true;
   let jobPostings = [];
   
   $: {
+    
+    // Debug applicant count untuk setiap job
+    if (data.jobPostings) {
+        data.jobPostings.forEach(job => {
+            console.log(`Client - Job ${job.id} (${job.title}): ${job.applicantCount} applicants`);
+        });
+    }
+    
     // Update job postings based on filter
     if (showActive) {
-      jobPostings = data.activeJobPostings;
+        jobPostings = data.activeJobPostings;
     } else {
-      jobPostings = data.inactiveJobPostings;
+        jobPostings = data.inactiveJobPostings;
     }
   }
   
@@ -31,10 +41,30 @@
     showDeleteConfirmModal = true;
   }
   
+  // Check if job is expired by deadline
+  function isExpiredByDeadline(deadline) {
+    return new Date(deadline) <= new Date();
+  }
+  
+  // Get effective status berdasarkan status field dan deadline
+  function getEffectiveStatus(job) {
+    // Jika ada field status, gunakan itu terlebih dahulu
+    if (job.status === 'inactive') {
+      return 'inactive';
+    }
+    
+    // Jika deadline sudah lewat, otomatis expired meskipun status active
+    if (isExpiredByDeadline(job.deadline)) {
+      return 'expired';
+    }
+    
+    // Default ke active jika status active dan deadline belum lewat
+    return 'active';
+  }
+  
   // Format requirements for display
   function formatRequirements(requirements) {
     if (typeof requirements === 'string') {
-        // Jika requirements adalah string, split berdasarkan newline
         return requirements
             .split('\n')
             .map(item => item.trim())
@@ -53,23 +83,30 @@
     }
     return 0;
   }
-  
-  // Set minimum date for deadline to today
-  let minDate;
-  
-  
-  onMount(() => {
-    // Set minimum date to today
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    minDate = `${year}-${month}-${day}`;
+
+  // Handle status toggle
+  async function handleStatusToggle(jobId, currentStatus) {
+    // Buat form dan submit
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '?/toggleStatus';
     
-    if (!deadline) {
-      deadline = minDate;
-    }
-  });
+    const idInput = document.createElement('input');
+    idInput.type = 'hidden';
+    idInput.name = 'id';
+    idInput.value = jobId;
+    
+    const statusInput = document.createElement('input');
+    statusInput.type = 'hidden';
+    statusInput.name = 'currentStatus';
+    statusInput.value = currentStatus;
+    
+    form.appendChild(idInput);
+    form.appendChild(statusInput);
+    document.body.appendChild(form);
+    
+    form.submit();
+  }
 </script>
 
 <svelte:head>
@@ -97,7 +134,7 @@
           ></label>
         </div>
         <span class="text-sm font-medium {showActive ? 'text-green-600' : 'text-gray-500'}">
-          {showActive ? 'Active' : 'Inactive'} Jobs
+          {showActive ? 'Active' : 'Expired'} Jobs
         </span>
       </div>
       
@@ -109,7 +146,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
-        Add Job Posting
+        Tambah Lowongan Baru
       </a>
     </div>
   </div>
@@ -119,6 +156,14 @@
     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
       <p class="font-bold">Error</p>
       <p>{data.error || 'Failed to load job postings.'}</p>
+    </div>
+  {/if}
+
+  <!-- Error Message -->
+  {#if form?.status === 'error'}
+    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+      <p class="font-bold">Error</p>
+      <p>{form.message}</p>
     </div>
   {/if}
   
@@ -134,10 +179,10 @@
             Department
           </th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Deadline
+            Status
           </th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Applicants
+            Deadline
           </th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Actions
@@ -147,28 +192,64 @@
       <tbody class="bg-white divide-y divide-gray-200">
         {#if jobPostings && jobPostings.length > 0}
           {#each jobPostings as job}
+            {@const effectiveStatus = getEffectiveStatus(job)}
             <tr class="hover:bg-gray-50">
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm font-medium text-gray-900">{job.title}</div>
+                <div class="text-sm text-gray-500">{job.salary || 'Salary not specified'}</div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-500">{job.department}</div>
+                <div class="text-sm text-gray-400">{job.location || 'Location not specified'}</div>
+                <!-- Tampilkan jumlah pelamar -->
+                <div class="text-xs text-blue-600 font-medium mt-1">
+                  {job.applicantCount || 0} pelamar
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                {#if effectiveStatus === 'expired'}
+                  <!-- Status expired (deadline lewat) - tidak bisa diubah -->
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    Expired
+                  </span>
+                {:else}
+                  <!-- Toggle button untuk status active/inactive -->
+                  <form method="POST" action="?/toggleStatus" use:enhance class="inline">
+                    <input type="hidden" name="id" value={job.id} />
+                    <input type="hidden" name="currentStatus" value={job.status || 'active'} />
+                    
+                    <button 
+                      type="submit"
+                      class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 hover:shadow-md
+                        {(job.status || 'active') === 'active' 
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                          : 'bg-red-100 text-red-800 hover:bg-red-200'}"
+                      title="Klik untuk mengubah status"
+                    >
+                      <span class="w-2 h-2 rounded-full mr-2 
+                        {(job.status || 'active') === 'active' ? 'bg-green-500' : 'bg-red-500'}">
+                      </span>
+                      {(job.status || 'active') === 'active' ? 'Aktif' : 'Tidak Aktif'}
+                    </button>
+                  </form>
+                {/if}
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-500">{formatDate(job.deadline)}</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                  {getApplicantCount(job.applications)} applicants
-                </span>
+                {#if isExpiredByDeadline(job.deadline)}
+                  <div class="text-xs text-red-500">Deadline passed</div>
+                {/if}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <div class="flex space-x-2">
-                  <a href={`/recruitment/applications?jobId=${job.id}`} class="text-indigo-600 hover:text-indigo-900">
+                  <a 
+                    href={`/recruitment/applications?jobId=${job.id}`} 
+                    class="text-indigo-600 hover:text-indigo-900 font-medium"
+                  >
                     View
                   </a>
                   <button 
-                    class="text-red-600 hover:text-red-900" 
+                    class="text-red-600 hover:text-red-900 font-medium" 
                     on:click={() => confirmDelete(job.id)}
                   >
                     Delete
@@ -183,9 +264,9 @@
               <p class="text-lg">No job postings found.</p>
               <p class="text-sm mt-1">
                 {#if showActive}
-                  All current job postings have expired. <button class="text-blue-600 underline" on:click={() => showActive = false}>View inactive jobs</button>
+                  All current job postings have expired. <button class="text-blue-600 underline" on:click={() => showActive = false}>View expired jobs</button>
                 {:else}
-                  There are no inactive job postings. <button class="text-blue-600 underline" on:click={() => showActive = true}>View active jobs</button>
+                  There are no expired job postings. <button class="text-blue-600 underline" on:click={() => showActive = true}>View active jobs</button>
                 {/if}
               </p>
             </td>
@@ -194,8 +275,6 @@
       </tbody>
     </table>
   </div>
-  
-  <!-- No modal needed as we now have a dedicated add page -->
   
   <!-- Delete Confirmation Modal -->
   {#if showDeleteConfirmModal}
@@ -207,7 +286,7 @@
             Are you sure you want to delete this job posting? This action cannot be undone and will remove all associated applications.
           </p>
           
-          <form method="POST" action="?/delete">
+          <form method="POST" action="?/delete" use:enhance>
             <input type="hidden" name="id" value={selectedJobId} />
             
             <div class="flex justify-end space-x-3">

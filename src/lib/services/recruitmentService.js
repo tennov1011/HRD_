@@ -43,10 +43,13 @@ class RecruitmentService {
 		console.log('Request config:', config);
 
 		try {
+			console.log('Request URL:', url);
+			console.log('Request method:', config.method);
+			console.log('Request body:', config.body);
+
 			const response = await fetch(url, config);
-			
+
 			console.log('Response status:', response.status);
-			console.log('Response headers:', response.headers);
 
 			if (!response.ok) {
 				const errorText = await response.text();
@@ -71,24 +74,47 @@ class RecruitmentService {
 	}
 
 	/**
-	 * Get active job postings (deadline > current date)
+	 * Toggle job posting status between active and inactive
+	 * @param {number|string} id - Job posting ID
+	 * @param {string} newStatus - New status ('active' or 'inactive')
 	 */
-	async getActiveJobPostings() {
-		const now = new Date().toISOString();
-		return this.request(`/items/job_postings?filter[deadline][_gt]=${now}&sort=-date_created&fields=*,applications.id`);
+	async toggleJobStatus(id, newStatus) {
+		console.log('Toggling job status:', id, newStatus);
+		
+		return this.request(`/items/job_postings/${id}`, {
+			method: 'PATCH',
+			body: JSON.stringify({ status: newStatus })
+		});
 	}
 
 	/**
-	 * Get inactive job postings (deadline <= current date)
+	 * Get active job postings (status = 'active' OR null AND deadline > current date)
+	 */
+	async getActiveJobPostings() {
+		const now = new Date().toISOString();
+		
+		// Filter: (status = 'active' OR status is null) AND deadline > now
+		const endpoint = `/items/job_postings?filter[_and][0][_or][0][status][_eq]=active&filter[_and][0][_or][1][status][_null]=true&filter[_and][1][deadline][_gt]=${now}&sort=-date_created&fields=*,applications.id`;
+		const result = await this.request(endpoint);
+		return result;
+	}
+
+	/**
+	 * Get inactive job postings (status = 'inactive' OR deadline <= current date)
 	 */
 	async getInactiveJobPostings() {
 		const now = new Date().toISOString();
-		return this.request(`/items/job_postings?filter[deadline][_lte]=${now}&sort=-date_created&fields=*,applications.id`);
+		
+		// Filter: status = 'inactive' OR deadline <= now
+		const endpoint = `/items/job_postings?filter[_or][0][status][_eq]=inactive&filter[_or][1][deadline][_lte]=${now}&sort=-date_created&fields=*,applications.id`;
+		const result = await this.request(endpoint);
+		return result;
 	}
 
 	/**
 	 * Get job posting by ID
 	 * @param {number|string} id - Job posting ID
+	 * @param {object} jobData - Job posting data to update
 	 */
 	async getJobPostingById(id) {
 		return this.request(`/items/job_postings/${id}?fields=*,applications.id`);
@@ -100,7 +126,7 @@ class RecruitmentService {
 	 */
 	async createJobPosting(jobData) {
 		console.log('Creating job posting with data:', jobData);
-		
+
 		// Pastikan struktur data sesuai dengan Directus
 		return this.request('/items/job_postings', {
 			method: 'POST',
@@ -114,9 +140,12 @@ class RecruitmentService {
 	 * @param {object} jobData - Job posting data to update
 	 */
 	async updateJobPosting(id, jobData) {
+		console.log('Updating job posting:', id, jobData);
+		
+		// Sekarang kita bisa menyertakan field status
 		return this.request(`/items/job_postings/${id}`, {
 			method: 'PATCH',
-			body: JSON.stringify({ data: jobData })
+			body: JSON.stringify(jobData)
 		});
 	}
 

@@ -44,28 +44,13 @@
 	];
 
 	// Pilihan divisi - dari database master_data
-	$: divisiOptions = data?.masterData?.divisi || [
-		{ value: 'it', label: 'IT' },
-		{ value: 'hr', label: 'HR' },
-		{ value: 'finance', label: 'Finance' },
-		{ value: 'marketing', label: 'Marketing' },
-		{ value: 'produksi', label: 'Produksi' }
-	];
+	$: divisiOptions = data?.masterData?.divisi 
 
 	// Pilihan posisi jabatan - dari database master_data
-	$: posisiJabatanOptions = data?.masterData?.jabatan || [
-		{ value: 'manager', label: 'Manager' },
-		{ value: 'staff', label: 'Staff' },
-		{ value: 'supervisor', label: 'Supervisor' },
-		{ value: 'operator', label: 'Operator' }
-	];
+	$: posisiJabatanOptions = data?.masterData?.jabatan 
 
 	// Pilihan lokasi absen - dari database master_data
-	$: lokasiAbsenOptions = data?.masterData?.lokasi_absen || [
-		{ value: 'kantor_pusat', label: 'Kantor Pusat' },
-		{ value: 'pabrik_a', label: 'Pabrik A' },
-		{ value: 'gudang_b', label: 'Gudang B' }
-	]; 
+	$: lokasiAbsenOptions = data?.masterData?.lokasi_absen
 
 	// Pilihan status hubungan
 	const statusHubunganOptions = [

@@ -1,3 +1,4 @@
+
 <script>
 	import { formatDate } from '$lib/utils/dateUtils';
 
@@ -71,12 +72,12 @@
 
 							<div class="flex items-center justify-between">
 								<span class="text-sm font-medium text-blue-600">
-									{job.applications?.length || 0} applicants
+									{job.applicantCount || 0} pelamar
 								</span>
 								<span
 									class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
 								>
-									View Applications
+									Lihat Lowongan
 								</span>
 							</div>
 						</a>
@@ -106,7 +107,7 @@
 						/>
 					</svg>
 				</a>
-				<h1 class="text-2xl font-bold">{mappedApplicant.fullName} - {selectedJob.title}</h1>
+				<h1 class="text-2xl font-bold">{applicant?.fullName || 'Applicant'} - {selectedJob.title}</h1>
 			</div>
 		</div>
 	{:else}
@@ -170,6 +171,72 @@
 						<div>
 							<dt class="text-sm font-medium text-gray-500">Job Location</dt>
 							<dd class="mt-1 text-sm text-gray-900">{selectedJob.location || 'Not specified'}</dd>
+						</div>
+						<div>
+							<dt class="text-sm font-medium text-gray-500">Salary Range</dt>
+							<dd class="mt-1 text-sm text-gray-900">{selectedJob.salary || 'Not specified'}</dd>
+						</div>
+						<div>
+							<dt class="text-sm font-medium text-gray-500">Employment Type</dt>
+							<dd class="mt-1 text-sm text-gray-900">
+								{#if selectedJob.employment_type}
+									<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+										class:bg-green-100={selectedJob.employment_type === 'full-time'}
+										class:text-green-800={selectedJob.employment_type === 'full-time'}
+										class:bg-blue-100={selectedJob.employment_type === 'part-time'}
+										class:text-blue-800={selectedJob.employment_type === 'part-time'}
+										class:bg-purple-100={selectedJob.employment_type === 'contract'}
+										class:text-purple-800={selectedJob.employment_type === 'contract'}
+										class:bg-orange-100={selectedJob.employment_type === 'internship'}
+										class:text-orange-800={selectedJob.employment_type === 'internship'}
+										class:bg-gray-100={selectedJob.employment_type === 'freelance'}
+										class:text-gray-800={selectedJob.employment_type === 'freelance'}
+									>
+										{selectedJob.employment_type === 'full-time' ? 'Full Time' :
+										 selectedJob.employment_type === 'part-time' ? 'Part Time' :
+										 selectedJob.employment_type === 'contract' ? 'Kontrak' :
+										 selectedJob.employment_type === 'internship' ? 'Magang' :
+										 selectedJob.employment_type === 'freelance' ? 'Freelance' :
+										 selectedJob.employment_type}
+									</span>
+								{:else}
+									<span class="text-gray-500">Not specified</span>
+								{/if}
+							</dd>
+						</div>
+						<div>
+							<dt class="text-sm font-medium text-gray-500">Minimum Education</dt>
+							<dd class="mt-1 text-sm text-gray-900">
+								{#if selectedJob.min_education}
+									<span class="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
+										{selectedJob.min_education === 'sma' ? 'SMA/SMK' :
+										 selectedJob.min_education === 'diploma' ? 'Diploma (D3)' :
+										 selectedJob.min_education === 'sarjana' ? 'Sarjana (S1)' :
+										 selectedJob.min_education === 'magister' ? 'Magister (S2)' :
+										 selectedJob.min_education === 'doktor' ? 'Doktor (S3)' :
+										 selectedJob.min_education}
+									</span>
+								{:else}
+									<span class="text-gray-500">Not specified</span>
+								{/if}
+							</dd>
+						</div>
+						<div>
+							<dt class="text-sm font-medium text-gray-500">Experience Required</dt>
+							<dd class="mt-1 text-sm text-gray-900">
+								{#if selectedJob.experience}
+									<span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+										{selectedJob.experience === 'fresh-graduate' ? 'Fresh Graduate' :
+										 selectedJob.experience === '1-2-years' ? '1-2 Tahun' :
+										 selectedJob.experience === '3-5-years' ? '3-5 Tahun' :
+										 selectedJob.experience === '5-plus-years' ? '5+ Tahun' :
+										 selectedJob.experience === '10-plus-years' ? '10+ Tahun' :
+										 selectedJob.experience}
+									</span>
+								{:else}
+									<span class="text-gray-500">Not specified</span>
+								{/if}
+							</dd>
 						</div>
 						<div>
 							<dt class="text-sm font-medium text-gray-500">Application Deadline</dt>

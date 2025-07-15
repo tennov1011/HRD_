@@ -15,9 +15,46 @@ class ApplicantService {
 		this.token = DIRECTUS_TOKEN;
 	}
 
+	/**
+	 * Make authenticated request to Directus
+	 */
 	async request(endpoint, options = {}) {
-		if (!browser) return null;
+		if (!browser) {
+			// Jika di server, gunakan fetch langsung
+			const url = `${this.baseURL}${endpoint}`;
+			const config = {
+				headers: {
+					'Content-Type': 'application/json',
+					...(this.token && { Authorization: `Bearer ${this.token}` }),
+					...(options.headers || {})
+				},
+				...options
+			};
 
+			console.log('Making server request to:', url);
+			console.log('Request config:', config);
+
+			try {
+				const response = await fetch(url, config);
+
+				console.log('Response status:', response.status);
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error('API Error Response:', errorText);
+					throw new Error(`API Error: ${response.status} - ${errorText}`);
+				}
+
+				const data = await response.json();
+				console.log('Response data:', data);
+				return data;
+			} catch (error) {
+				console.error('Request error:', error);
+				throw error;
+			}
+		}
+
+		// Browser code tetap sama
 		const url = `${this.baseURL}${endpoint}`;
 		const config = {
 			headers: {
@@ -30,12 +67,14 @@ class ApplicantService {
 
 		try {
 			const response = await fetch(url, config);
+
 			if (!response.ok) {
 				throw new Error(`HTTP error ${response.status}`);
 			}
+
 			return await response.json();
 		} catch (error) {
-			console.error('API Error:', error);
+			console.error('Browser request error:', error);
 			throw error;
 		}
 	}
@@ -133,6 +172,34 @@ class ApplicantService {
 	 */
 	async getSupportingDocuments(applicantId) {
 		return this.request(`/items/application_documents?filter[application_id][_eq]=${applicantId}&fields=*,document_id.*`);
+	}
+
+	/**
+	 * Get applicant count for all job postings
+	 */
+	async getApplicantCounts() {
+		console.log('Getting applicant counts...');
+		
+		try {
+			const response = await this.request('/items/job_applications?fields=appliedJobId&limit=-1');
+			console.log('Applicant counts response:', response);
+			
+			const applications = response?.data || [];
+			console.log('Applications for counting:', applications);
+			
+			// Hitung per job ID
+			const counts = {};
+			applications.forEach(app => {
+				const jobId = String(app.appliedJobId);
+				counts[jobId] = (counts[jobId] || 0) + 1;
+			});
+			
+			console.log('Applicant counts by job ID:', counts);
+			return counts;
+		} catch (error) {
+			console.error('Error getting applicant counts:', error);
+			return {};
+		}
 	}
 }
 
