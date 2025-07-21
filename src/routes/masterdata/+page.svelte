@@ -57,6 +57,41 @@
 		jam_keluar: ''
 	};
 
+	// State untuk add shift modal
+	let showAddShiftModal = false;
+	let isSubmittingShift = false;
+	let addShiftForm = {
+		nama: '',
+		jam_masuk: '',
+		jam_keluar: '',
+		status: 'aktif'
+	};
+
+	// State untuk add lokasi absen modal
+	let showAddLokasiModal = false;
+	let isSubmittingLokasi = false;
+	let addLokasiForm = {
+		nama: '',
+		alamat: '',
+		status: 'aktif'
+	};
+
+	// State untuk add jabatan modal
+	let showAddJabatanModal = false;
+	let isSubmittingJabatan = false;
+	let addJabatanForm = {
+		nama: '',
+		status: 'aktif'
+	};
+
+	// State untuk add divisi modal
+	let showAddDivisiModal = false;
+	let isSubmittingDivisi = false;
+	let addDivisiForm = {
+		nama: '',
+		status: 'aktif'
+	};
+
 	// Fungsi untuk mengambil nilai berdasarkan field
 	function getFieldValue(item, field) {
 		switch (field) {
@@ -253,6 +288,62 @@
 		editCategory = null;
 	}
 
+	// Fungsi untuk add shift modal
+	function openAddShiftModal() {
+		showAddShiftModal = true;
+		// Reset form
+		addShiftForm = {
+			nama: '',
+			jam_masuk: '',
+			jam_keluar: '',
+			status: 'aktif'
+		};
+		isSubmittingShift = false;
+	}
+
+	function closeAddShiftModal() {
+		showAddShiftModal = false;
+		addShiftForm = {
+			nama: '',
+			jam_masuk: '',
+			jam_keluar: '',
+			status: 'aktif'
+		};
+		isSubmittingShift = false;
+	}
+
+	function confirmAddShift() {
+		if (!addShiftForm.nama || !addShiftForm.jam_masuk || !addShiftForm.jam_keluar) {
+			alert('Harap isi semua field yang wajib!');
+			return;
+		}
+
+		isSubmittingShift = true;
+
+		// Submit form programmatically
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = '?/addShift';
+
+		const fields = [
+			{ name: 'nama', value: addShiftForm.nama },
+			{ name: 'jam_masuk', value: addShiftForm.jam_masuk },
+			{ name: 'jam_keluar', value: addShiftForm.jam_keluar },
+			{ name: 'status', value: addShiftForm.status }
+		];
+
+		fields.forEach((field) => {
+			const input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = field.name;
+			input.value = field.value;
+			form.appendChild(input);
+		});
+
+		document.body.appendChild(form);
+		form.submit();
+	}
+
 	// Fungsi untuk mendapatkan statistik
 	function getStats() {
 		return {
@@ -262,6 +353,159 @@
 			lokasi_absen: masterData.lokasi_absen.length,
 			shift: masterData.shift.length
 		};
+	}
+
+	// Fungsi untuk lokasi absen modal
+	function openAddLokasiModal() {
+		showAddLokasiModal = true;
+		// Reset form
+		addLokasiForm = {
+			nama: '',
+			alamat: '',
+			status: 'aktif'
+		};
+		isSubmittingLokasi = false;
+	}
+
+	function closeAddLokasiModal() {
+		showAddLokasiModal = false;
+		addLokasiForm = {
+			nama: '',
+			alamat: '',
+			status: 'aktif'
+		};
+		isSubmittingLokasi = false;
+	}
+
+	function confirmAddLokasi() {
+		if (!addLokasiForm.nama || !addLokasiForm.alamat) {
+			alert('Harap isi semua field yang wajib!');
+			return;
+		}
+
+		isSubmittingLokasi = true;
+
+		// Submit form programmatically
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = '?/addLokasiAbsen';
+
+		const fields = [
+			{ name: 'nama', value: addLokasiForm.nama },
+			{ name: 'alamat', value: addLokasiForm.alamat },
+			{ name: 'status', value: addLokasiForm.status }
+		];
+
+		fields.forEach((field) => {
+			const input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = field.name;
+			input.value = field.value;
+			form.appendChild(input);
+		});
+
+		document.body.appendChild(form);
+		form.submit();
+	}
+
+	// Fungsi untuk jabatan modal
+	function openAddJabatanModal() {
+		showAddJabatanModal = true;
+		// Reset form
+		addJabatanForm = {
+			nama: '',
+			status: 'aktif'
+		};
+		isSubmittingJabatan = false;
+	}
+
+	function closeAddJabatanModal() {
+		showAddJabatanModal = false;
+		addJabatanForm = {
+			nama: '',
+			status: 'aktif'
+		};
+		isSubmittingJabatan = false;
+	}
+
+	function confirmAddJabatan() {
+		if (!addJabatanForm.nama) {
+			alert('Harap isi nama jabatan!');
+			return;
+		}
+
+		isSubmittingJabatan = true;
+
+		// Submit form programmatically
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = '?/addJabatan';
+
+		const fields = [
+			{ name: 'nama', value: addJabatanForm.nama },
+			{ name: 'status', value: addJabatanForm.status }
+		];
+
+		fields.forEach((field) => {
+			const input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = field.name;
+			input.value = field.value;
+			form.appendChild(input);
+		});
+
+		document.body.appendChild(form);
+		form.submit();
+	}
+
+	// Fungsi untuk divisi modal
+	function openAddDivisiModal() {
+		showAddDivisiModal = true;
+		// Reset form
+		addDivisiForm = {
+			nama: '',
+			status: 'aktif'
+		};
+		isSubmittingDivisi = false;
+	}
+
+	function closeAddDivisiModal() {
+		showAddDivisiModal = false;
+		addDivisiForm = {
+			nama: '',
+			status: 'aktif'
+		};
+		isSubmittingDivisi = false;
+	}
+
+	function confirmAddDivisi() {
+		if (!addDivisiForm.nama) {
+			alert('Harap isi nama divisi!');
+			return;
+		}
+
+		isSubmittingDivisi = true;
+
+		// Submit form programmatically
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = '?/addDivisi';
+
+		const fields = [
+			{ name: 'nama', value: addDivisiForm.nama },
+			{ name: 'status', value: addDivisiForm.status }
+		];
+
+		fields.forEach((field) => {
+			const input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = field.name;
+			input.value = field.value;
+			form.appendChild(input);
+		});
+
+		document.body.appendChild(form);
+		form.submit();
 	}
 
 	$: stats = getStats();
@@ -364,8 +608,66 @@
 								<p>{config.description}</p>
 							</div>
 						</div>
-						<div class="card-badge">
-							{masterData[category].length} item
+						<div class="card-header-actions">
+							{#if category === 'shift'}
+								<button class="add-btn" on:click={openAddShiftModal} title="Tambah Shift Baru">
+									<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										></path>
+									</svg>
+									Tambah Shift
+								</button>
+							{/if}
+							{#if category === 'lokasi_absen'}
+								<button
+									class="add-btn"
+									on:click={openAddLokasiModal}
+									title="Tambah Lokasi Absen Baru"
+								>
+									<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										></path>
+									</svg>
+									Tambah Lokasi Absen
+								</button>
+							{/if}
+							{#if category === 'jabatan'}
+								<button class="add-btn" on:click={openAddJabatanModal} title="Tambah Jabatan Baru">
+									<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										></path>
+									</svg>
+									Tambah Jabatan
+								</button>
+							{/if}
+							{#if category === 'divisi'}
+								<button class="add-btn" on:click={openAddDivisiModal} title="Tambah Divisi Baru">
+									<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 4v16m8-8H4"
+										></path>
+									</svg>
+									Tambah Divisi
+								</button>
+							{/if}
+							<div class="card-badge">
+								{masterData[category].length} item
+							</div>
 						</div>
 					</div>
 
@@ -397,12 +699,26 @@
 															<button
 																class="action-btn delete"
 																title="Hapus {item.nama}"
-																on:click={() =>
-																	handleDelete(
-																		item,
-																		config.title.toLowerCase(),
-																		`delete${category.charAt(0).toUpperCase() + category.slice(1).replace('_', '')}`
-																	)}
+																on:click={() => {
+																	let deleteAction = '';
+																	switch (category) {
+																		case 'divisi':
+																			deleteAction = 'deleteDivisi';
+																			break;
+																		case 'jabatan':
+																			deleteAction = 'deleteJabatan';
+																			break;
+																		case 'lokasi_absen':
+																			deleteAction = 'deleteLokasiAbsen';
+																			break;
+																		case 'shift':
+																			deleteAction = 'deleteShift';
+																			break;
+																		default:
+																			deleteAction = 'delete';
+																	}
+																	handleDelete(item, config.title.toLowerCase(), deleteAction);
+																}}
 															>
 																🗑️
 															</button>
@@ -549,6 +865,524 @@
 	</div>
 {/if}
 
+<!-- Add Shift Modal -->
+{#if showAddShiftModal}
+	<div class="modal-overlay" on:click={closeAddShiftModal}>
+		<div class="modal-content add-shift-modal" on:click|stopPropagation>
+			<div class="modal-header">
+				<div class="modal-icon">⏰</div>
+				<h3>Tambah Shift Baru</h3>
+			</div>
+
+			<div class="modal-body">
+				<form class="add-shift-form" on:submit|preventDefault={confirmAddShift}>
+					<!-- Nama Shift -->
+					<div class="form-group">
+						<label for="add-nama" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+								></path>
+							</svg>
+							Nama Shift
+							<span class="required">*</span>
+						</label>
+						<input
+							id="add-nama"
+							type="text"
+							class="form-input"
+							bind:value={addShiftForm.nama}
+							placeholder="Contoh: Shift Pagi, Shift Siang, Shift Malam"
+							required
+						/>
+					</div>
+
+					<!-- Time Fields -->
+					<div class="form-row">
+						<div class="form-group">
+							<label for="add-jam-masuk" class="form-label">
+								<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+									></path>
+								</svg>
+								Jam Masuk
+								<span class="required">*</span>
+							</label>
+							<input
+								id="add-jam-masuk"
+								type="time"
+								class="form-input"
+								bind:value={addShiftForm.jam_masuk}
+								required
+							/>
+						</div>
+
+						<div class="form-group">
+							<label for="add-jam-keluar" class="form-label">
+								<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+									></path>
+								</svg>
+								Jam Keluar
+								<span class="required">*</span>
+							</label>
+							<input
+								id="add-jam-keluar"
+								type="time"
+								class="form-input"
+								bind:value={addShiftForm.jam_keluar}
+								required
+							/>
+						</div>
+					</div>
+
+					<!-- Status -->
+					<div class="form-group">
+						<label for="add-status" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								></path>
+							</svg>
+							Status
+						</label>
+						<select id="add-status" class="form-select" bind:value={addShiftForm.status}>
+							<option value="aktif">✅ Aktif</option>
+							<option value="tidak_aktif">❌ Tidak Aktif</option>
+						</select>
+					</div>
+
+					<!-- Help Text -->
+					<!-- <div class="help-box">
+						<div class="help-icon">💡</div>
+						<div class="help-content">
+							<p><strong>Tips:</strong></p>
+							<ul>
+								<li>Gunakan nama shift yang jelas dan mudah dipahami</li>
+								<li>Pastikan jam masuk dan keluar sesuai kebijakan perusahaan</li>
+								<li>Shift yang tidak aktif tidak akan muncul dalam pilihan presensi</li>
+							</ul>
+						</div>
+					</div> -->
+				</form>
+			</div>
+
+			<div class="modal-actions">
+				<button
+					class="btn btn-secondary"
+					on:click={closeAddShiftModal}
+					disabled={isSubmittingShift}
+				>
+					Batal
+				</button>
+				<button class="btn btn-primary" on:click={confirmAddShift} disabled={isSubmittingShift}>
+					{#if isSubmittingShift}
+						<svg class="loading-spinner" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						Menyimpan...
+					{:else}
+						<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							></path>
+						</svg>
+						Simpan Shift
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Add Lokasi Absen Modal -->
+{#if showAddLokasiModal}
+	<div
+		class="modal-overlay"
+		on:click={closeAddLokasiModal}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div
+			class="modal-content add-lokasi-modal"
+			on:click|stopPropagation
+			role="dialog"
+			tabindex="0"
+			aria-label="Add location form"
+		>
+			<div class="modal-header">
+				<div class="modal-icon">📍</div>
+				<h3>Tambah Lokasi Absen Baru</h3>
+			</div>
+
+			<div class="modal-body">
+				<form on:submit|preventDefault={confirmAddLokasi}>
+					<!-- Nama Lokasi -->
+					<div class="form-group">
+						<label for="add-nama-lokasi" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+								></path>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+								></path>
+							</svg>
+							Nama Lokasi <span class="required">*</span>
+						</label>
+						<input
+							id="add-nama-lokasi"
+							type="text"
+							class="form-input"
+							bind:value={addLokasiForm.nama}
+							placeholder="Contoh: Kantor Pusat, Cabang Jakarta"
+							required
+						/>
+					</div>
+
+					<!-- Alamat -->
+					<div class="form-group">
+						<label for="add-alamat" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M3 21v-4a4 4 0 014-4h5a4 4 0 014 4v4M16 7a4 4 0 11-8 0 4 4 0 018 0z"
+								></path>
+							</svg>
+							Alamat <span class="required">*</span>
+						</label>
+						<textarea
+							id="add-alamat"
+							class="form-textarea"
+							bind:value={addLokasiForm.alamat}
+							placeholder="Masukkan alamat lengkap lokasi absen"
+							rows="3"
+							required
+						></textarea>
+					</div>
+
+					<!-- Status -->
+					<div class="form-group">
+						<label for="add-status-lokasi" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								></path>
+							</svg>
+							Status
+						</label>
+						<select id="add-status-lokasi" class="form-select" bind:value={addLokasiForm.status}>
+							<option value="aktif">✅ Aktif</option>
+							<option value="tidak_aktif">❌ Tidak Aktif</option>
+						</select>
+					</div>
+				</form>
+			</div>
+
+			<div class="modal-actions">
+				<button
+					class="btn btn-secondary"
+					on:click={closeAddLokasiModal}
+					disabled={isSubmittingLokasi}
+				>
+					Batal
+				</button>
+				<button class="btn btn-primary" on:click={confirmAddLokasi} disabled={isSubmittingLokasi}>
+					{#if isSubmittingLokasi}
+						<svg class="loading-spinner" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						Menyimpan...
+					{:else}
+						<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							></path>
+						</svg>
+						Simpan Lokasi
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Add Jabatan Modal -->
+{#if showAddJabatanModal}
+	<div
+		class="modal-overlay"
+		on:click={closeAddJabatanModal}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div
+			class="modal-content add-jabatan-modal"
+			on:click|stopPropagation
+			role="dialog"
+			tabindex="0"
+			aria-label="Add position form"
+		>
+			<div class="modal-header">
+				<div class="modal-icon">👔</div>
+				<h3>Tambah Jabatan Baru</h3>
+			</div>
+
+			<div class="modal-body">
+				<form on:submit|preventDefault={confirmAddJabatan}>
+					<!-- Nama Jabatan -->
+					<div class="form-group">
+						<label for="add-nama-jabatan" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+								></path>
+							</svg>
+							Nama Jabatan <span class="required">*</span>
+						</label>
+						<input
+							id="add-nama-jabatan"
+							type="text"
+							class="form-input"
+							bind:value={addJabatanForm.nama}
+							placeholder="Contoh: Manager, Supervisor, Staff"
+							required
+						/>
+					</div>
+
+					<!-- Status -->
+					<div class="form-group">
+						<label for="add-status-jabatan" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								></path>
+							</svg>
+							Status
+						</label>
+						<select id="add-status-jabatan" class="form-select" bind:value={addJabatanForm.status}>
+							<option value="aktif">✅ Aktif</option>
+							<option value="tidak_aktif">❌ Tidak Aktif</option>
+						</select>
+					</div>
+				</form>
+			</div>
+
+			<div class="modal-actions">
+				<button
+					class="btn btn-secondary"
+					on:click={closeAddJabatanModal}
+					disabled={isSubmittingJabatan}
+				>
+					Batal
+				</button>
+				<button class="btn btn-primary" on:click={confirmAddJabatan} disabled={isSubmittingJabatan}>
+					{#if isSubmittingJabatan}
+						<svg class="loading-spinner" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						Menyimpan...
+					{:else}
+						<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							></path>
+						</svg>
+						Simpan Jabatan
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Add Divisi Modal -->
+{#if showAddDivisiModal}
+	<div
+		class="modal-overlay"
+		on:click={closeAddDivisiModal}
+		role="button"
+		tabindex="0"
+		aria-label="Close modal"
+	>
+		<div
+			class="modal-content add-divisi-modal"
+			on:click|stopPropagation
+			role="dialog"
+			tabindex="0"
+			aria-label="Add division form"
+		>
+			<div class="modal-header">
+				<div class="modal-icon">🏢</div>
+				<h3>Tambah Divisi Baru</h3>
+			</div>
+
+			<div class="modal-body">
+				<form on:submit|preventDefault={confirmAddDivisi}>
+					<!-- Nama Divisi -->
+					<div class="form-group">
+						<label for="add-nama-divisi" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M7 8h10M7 12h10m-5 4h5"
+								></path>
+							</svg>
+							Nama Divisi <span class="required">*</span>
+						</label>
+						<input
+							id="add-nama-divisi"
+							type="text"
+							class="form-input"
+							bind:value={addDivisiForm.nama}
+							placeholder="Contoh: HRD, Keuangan, IT"
+							required
+						/>
+					</div>
+
+					<!-- Status -->
+					<div class="form-group">
+						<label for="add-status-divisi" class="form-label">
+							<svg class="label-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+								></path>
+							</svg>
+							Status
+						</label>
+						<select id="add-status-divisi" class="form-select" bind:value={addDivisiForm.status}>
+							<option value="aktif">✅ Aktif</option>
+							<option value="tidak_aktif">❌ Tidak Aktif</option>
+						</select>
+					</div>
+				</form>
+			</div>
+
+			<div class="modal-actions">
+				<button
+					class="btn btn-secondary"
+					on:click={closeAddDivisiModal}
+					disabled={isSubmittingDivisi}
+				>
+					Batal
+				</button>
+				<button class="btn btn-primary" on:click={confirmAddDivisi} disabled={isSubmittingDivisi}>
+					{#if isSubmittingDivisi}
+						<svg class="loading-spinner" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						Menyimpan...
+					{:else}
+						<svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							></path>
+						</svg>
+						Simpan Divisi
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
 	/* Global Styles */
 	:global(body) {
@@ -566,8 +1400,8 @@
 	/* Main Container */
 	.master-data-container {
 		min-height: 100vh;
-		padding: 1.5rem 3rem;
-		max-width: 1600px;
+		padding: 1rem 2rem;
+		max-width: 1400px;
 		margin: 0 auto;
 		animation: fadeInUp 0.6s ease-out;
 		width: 100%;
@@ -588,11 +1422,11 @@
 	.page-header {
 		background: rgba(255, 255, 255, 0.95);
 		backdrop-filter: blur(20px);
-		border-radius: 24px;
-		padding: 2.5rem;
-		margin-bottom: 2rem;
+		border-radius: 16px;
+		padding: 1.5rem;
+		margin-bottom: 1.5rem;
 		box-shadow:
-			0 20px 50px rgba(0, 0, 0, 0.08),
+			0 10px 25px rgba(0, 0, 0, 0.05),
 			0 1px 0 rgba(255, 255, 255, 0.8) inset;
 		border: 1px solid rgba(255, 255, 255, 0.3);
 	}
@@ -602,40 +1436,40 @@
 		justify-content: space-between;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 2rem;
+		gap: 1.5rem;
 	}
 
 	.header-text h1 {
-		font-size: 2.5rem;
+		font-size: 1.75rem;
 		font-weight: 700;
 		color: #1a1a1a;
-		margin: 0 0 0.5rem 0;
+		margin: 0 0 0.25rem 0;
 		letter-spacing: -0.02em;
 	}
 
 	.header-text p {
 		color: #666;
-		font-size: 1.1rem;
+		font-size: 0.9rem;
 		margin: 0;
 	}
 
 	/* Statistics Grid */
 	.stats-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-		gap: 1rem;
-		max-width: 700px;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 0.75rem;
+		max-width: 600px;
 		width: 100%;
 	}
 
 	.stat-card {
 		background: rgba(255, 255, 255, 0.9);
-		border-radius: 16px;
-		padding: 1.5rem;
+		border-radius: 12px;
+		padding: 1rem;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+		gap: 0.75rem;
+		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
 		border: 1px solid rgba(255, 255, 255, 0.5);
 		transition: all 0.3s ease;
 		position: relative;
@@ -658,8 +1492,8 @@
 	}
 
 	.stat-card:hover {
-		transform: translateY(-5px);
-		box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+		transform: translateY(-2px);
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 	}
 
 	.stat-card.total {
@@ -668,7 +1502,7 @@
 	}
 
 	.stat-icon {
-		font-size: 2rem;
+		font-size: 1.5rem;
 		opacity: 0.9;
 	}
 
@@ -677,13 +1511,13 @@
 	}
 
 	.stat-number {
-		font-size: 1.8rem;
+		font-size: 1.5rem;
 		font-weight: 700;
-		margin-bottom: 0.25rem;
+		margin-bottom: 0.125rem;
 	}
 
 	.stat-label {
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		opacity: 0.8;
 		font-weight: 500;
 	}
@@ -694,8 +1528,8 @@
 		justify-content: space-between;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 1.5rem;
-		margin-bottom: 2rem;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.search-box {
@@ -703,26 +1537,26 @@
 		display: flex;
 		align-items: center;
 		background: rgba(255, 255, 255, 0.95);
-		border-radius: 12px;
-		padding: 0 1rem;
-		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+		border-radius: 10px;
+		padding: 0 0.75rem;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 		border: 1px solid rgba(255, 255, 255, 0.3);
-		min-width: 350px;
+		min-width: 300px;
 		flex: 1;
-		max-width: 500px;
+		max-width: 400px;
 	}
 
 	.search-icon {
 		color: #9ca3af;
-		margin-right: 0.75rem;
-		font-size: 1.2rem;
+		margin-right: 0.5rem;
+		font-size: 1rem;
 	}
 
 	.search-input {
 		border: none;
 		background: transparent;
-		padding: 1rem 0;
-		font-size: 1rem;
+		padding: 0.75rem 0;
+		font-size: 0.9rem;
 		width: 100%;
 		outline: none;
 		color: #374151;
@@ -736,20 +1570,20 @@
 	.filter-tabs {
 		display: flex;
 		background: rgba(255, 255, 255, 0.9);
-		border-radius: 12px;
-		padding: 0.5rem;
-		gap: 0.25rem;
-		box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+		border-radius: 10px;
+		padding: 0.25rem;
+		gap: 0.125rem;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 		border: 1px solid rgba(255, 255, 255, 0.3);
 		flex-wrap: wrap;
 	}
 
 	.filter-tab {
-		padding: 0.75rem 1.25rem;
+		padding: 0.5rem 0.75rem;
 		border: none;
 		background: transparent;
-		border-radius: 8px;
-		font-size: 0.875rem;
+		border-radius: 6px;
+		font-size: 0.8rem;
 		font-weight: 500;
 		color: #6b7280;
 		cursor: pointer;
@@ -771,17 +1605,17 @@
 	/* Tables Grid */
 	.tables-grid {
 		display: grid;
-		gap: 2rem;
-		grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+		gap: 1.5rem;
+		grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
 	}
 
 	/* Data Card */
 	.data-card {
 		background: rgba(255, 255, 255, 0.95);
 		backdrop-filter: blur(20px);
-		border-radius: 20px;
+		border-radius: 14px;
 		overflow: hidden;
-		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
 		border: 1px solid rgba(255, 255, 255, 0.3);
 		transition: all 0.3s ease;
 		animation: cardAppear 0.6s ease-out;
@@ -799,51 +1633,84 @@
 	}
 
 	.data-card:hover {
-		transform: translateY(-5px);
-		box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
+		transform: translateY(-3px);
+		box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
 	}
 
 	/* Card Header */
 	.card-header {
-		padding: 2rem;
+		padding: 1.25rem;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 	}
 
+	.card-header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.add-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		background: linear-gradient(135deg, #10b981, #059669);
+		color: white;
+		border: none;
+		padding: 0.5rem 0.75rem;
+		border-radius: 8px;
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+	}
+
+	.add-btn:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+		background: linear-gradient(135deg, #059669, #047857);
+	}
+
+	.btn-icon {
+		width: 0.875rem;
+		height: 0.875rem;
+	}
+
 	.card-title {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 0.75rem;
 	}
 
 	.title-icon {
-		font-size: 2rem;
+		font-size: 1.5rem;
 		opacity: 0.9;
 	}
 
 	.title-text h3 {
-		font-size: 1.5rem;
+		font-size: 1.25rem;
 		font-weight: 700;
 		color: #1a1a1a;
-		margin: 0 0 0.25rem 0;
+		margin: 0 0 0.125rem 0;
 	}
 
 	.title-text p {
 		color: #666;
-		font-size: 0.9rem;
+		font-size: 0.8rem;
 		margin: 0;
 	}
 
 	.card-badge {
 		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 20px;
-		font-size: 0.875rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: 16px;
+		font-size: 0.8rem;
 		font-weight: 600;
-		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+		box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
 	}
 
 	/* Card Content */
@@ -866,9 +1733,9 @@
 	}
 
 	.data-table th {
-		padding: 1.25rem 1.5rem;
+		padding: 1rem 1.25rem;
 		text-align: left;
-		font-size: 0.875rem;
+		font-size: 0.8rem;
 		font-weight: 600;
 		color: #374151;
 		text-transform: uppercase;
@@ -885,13 +1752,13 @@
 	}
 
 	.data-table td {
-		padding: 1.25rem 1.5rem;
+		padding: 0.875rem 1.25rem;
 		border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 		vertical-align: middle;
 	}
 
 	.cell-content {
-		font-size: 0.95rem;
+		font-size: 0.875rem;
 		color: #374151;
 		font-weight: 500;
 	}
@@ -900,9 +1767,9 @@
 	.status-badge {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.5rem 1rem;
-		border-radius: 20px;
-		font-size: 0.875rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: 16px;
+		font-size: 0.8rem;
 		font-weight: 600;
 		text-transform: capitalize;
 	}
@@ -922,24 +1789,24 @@
 	/* Action Buttons */
 	.action-buttons {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		justify-content: center;
 	}
 
 	.action-btn {
-		padding: 0.5rem;
+		padding: 0.375rem;
 		border: none;
-		border-radius: 8px;
+		border-radius: 6px;
 		cursor: pointer;
-		font-size: 1.1rem;
+		font-size: 1rem;
 		transition: all 0.3s ease;
 		background: rgba(255, 255, 255, 0.8);
 		border: 1px solid rgba(0, 0, 0, 0.1);
 	}
 
 	.action-btn:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 	}
 
 	.action-btn.edit:hover {
@@ -989,6 +1856,22 @@
 
 	.edit-modal {
 		max-width: 500px;
+	}
+
+	.add-shift-modal {
+		max-width: 550px;
+	}
+
+	.add-lokasi-modal {
+		max-width: 550px;
+	}
+
+	.add-jabatan-modal {
+		max-width: 550px;
+	}
+
+	.add-divisi-modal {
+		max-width: 550px;
 	}
 
 	@keyframes modalSlideIn {
@@ -1177,5 +2060,84 @@
 	.form-input::placeholder,
 	.form-textarea::placeholder {
 		color: #9ca3af;
+	}
+
+	/* Add Shift Form Styles */
+	.add-shift-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.label-icon {
+		width: 1rem;
+		height: 1rem;
+		margin-right: 0.5rem;
+		opacity: 0.7;
+	}
+
+	.form-label {
+		display: flex;
+		align-items: center;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #374151;
+		margin-bottom: 0.5rem;
+	}
+
+	.required {
+		color: #ef4444;
+		margin-left: 0.25rem;
+		font-weight: 700;
+	}
+
+	.help-box {
+		background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+		border: 1px solid #0ea5e9;
+		border-radius: 12px;
+		padding: 1rem;
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.help-icon {
+		font-size: 1.25rem;
+		flex-shrink: 0;
+	}
+
+	.help-content p {
+		margin: 0 0 0.5rem 0;
+		font-weight: 600;
+		color: #075985;
+		font-size: 0.875rem;
+	}
+
+	.help-content ul {
+		margin: 0;
+		padding-left: 1rem;
+		color: #0369a1;
+	}
+
+	.help-content li {
+		margin-bottom: 0.25rem;
+		font-size: 0.8rem;
+		line-height: 1.4;
+	}
+
+	.loading-spinner {
+		width: 1rem;
+		height: 1rem;
+		margin-right: 0.5rem;
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

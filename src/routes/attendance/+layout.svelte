@@ -20,6 +20,12 @@
 			>
 				📊 Presensi Bulanan
 			</a>
+			<a
+				href="/attendance/holidays"
+				class="nav-tab {currentPath.includes('/attendance/holidays') ? 'active' : ''}"
+			>
+				🏖️ Daftar Libur
+			</a>
 		</div>
 	</div>
 
