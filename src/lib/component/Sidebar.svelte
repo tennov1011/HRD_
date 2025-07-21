@@ -59,13 +59,31 @@
 			hasDropdown: true,
 			icon: '📝',
 			subMenus: [
+				{ label: 'Tambah Lowongan', href: '/recruitment/add', icon: '➕' },
 				{ label: 'Daftar Lowongan', href: '/recruitment', icon: '📢' },
 				{ label: 'Detail Lowongan', href: '/recruitment/applications', icon: '👤' },
-				{ label: 'Tambah Lowongan', href: '/recruitment/add', icon: '➕' },
 				{ label: 'Daftar Pelamar', href: '/recruitment/candidates', icon: '👥' }
 			]
 		},
-		{ label: 'Dokumen', href: '/documents', icon: '📄' }
+		{ 
+			label: 'Training',
+			hasDropdown: true,
+			icon: '📚',
+			subMenus: [
+				{ label: 'Tambah Training', href: '/training/add', icon: '➕' },
+				{ label: 'Daftar Training', href: '/training/list', icon: '📚' },
+				{ label: 'Modul Training', href: '/training/module', icon: '📋' },
+				{ label: 'Rekapitulasi Evaluasi Training', href: '/training/recap', icon: '📊' }
+			]
+		},
+		{ 
+			label: 'Document',
+			hasDropdown: true,
+			icon: '📄',
+			subMenus: [
+				{ label: 'SOP', href: '/training/add', icon: '➕' },
+			]
+		}
 	];
 
 	$: currentPath = $page.url.pathname;
