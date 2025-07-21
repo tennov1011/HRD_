@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="id">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Rejection Modal Preview</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				background: #f8fafc;
+				padding: 20px;
+			}
+
+			.container {
+				max-width: 800px;
+				margin: 0 auto;
+				background: white;
+				border-radius: 12px;
+				padding: 30px;
+				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			}
+
+			h1 {
+				color: #1f2937;
+				margin-bottom: 20px;
+				text-align: center;
+			}
+
+			.demo-section {
+				margin-bottom: 30px;
+				padding: 20px;
+				border: 1px solid #e5e7eb;
+				border-radius: 8px;
+				background: #f9fafb;
+			}
+
+			.demo-button {
+				background: #dc2626;
+				color: white;
+				border: none;
+				padding: 10px 20px;
+				border-radius: 8px;
+				cursor: pointer;
+				font-size: 14px;
+				transition: all 0.2s ease;
+			}
+
+			.demo-button:hover {
+				background: #b91c1c;
+			}
+
+			/* Modal styles matching the Svelte implementation */
+			.modal-overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: rgba(0, 0, 0, 0.7);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+			}
+
+			.modal-content {
+				background: white;
+				border-radius: 12px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+				overflow: hidden;
+				width: 90%;
+				max-width: 600px;
+				max-height: 90vh;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.modal-header {
+				padding: 20px;
+				border-bottom: 1px solid #e5e7eb;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #f8fafc;
+			}
+
+			.modal-header h3 {
+				margin: 0;
+				font-size: 18px;
+				color: #1f2937;
+			}
+
+			.modal-body {
+				padding: 20px;
+				flex: 1;
+				overflow-y: auto;
+			}
+
+			.btn-close {
+				background: transparent;
+				border: none;
+				cursor: pointer;
+				font-size: 18px;
+				color: #6b7280;
+				padding: 4px;
+				border-radius: 4px;
+				transition: background-color 0.2s;
+			}
+
+			.btn-close:hover {
+				background: #f3f4f6;
+				color: #374151;
+			}
+
+			.rejection-info {
+				background: #f8f9fa;
+				border: 1px solid #e9ecef;
+				border-radius: 8px;
+				padding: 16px;
+				margin-bottom: 24px;
+			}
+
+			.info-row {
+				display: flex;
+				align-items: flex-start;
+				margin-bottom: 8px;
+				gap: 12px;
+			}
+
+			.info-row:last-child {
+				margin-bottom: 0;
+			}
+
+			.info-row .label {
+				font-weight: 500;
+				color: #374151;
+				min-width: 100px;
+				flex-shrink: 0;
+			}
+
+			.info-row .value {
+				color: #1f2937;
+				flex: 1;
+			}
+
+			.rejection-form {
+				margin-bottom: 24px;
+			}
+
+			.form-label {
+				display: block;
+				font-weight: 500;
+				color: #374151;
+				margin-bottom: 8px;
+				font-size: 14px;
+			}
+
+			.form-label .required {
+				color: #dc2626;
+				margin-right: 4px;
+			}
+
+			.rejection-textarea {
+				width: 100%;
+				padding: 12px;
+				border: 1px solid #d1d5db;
+				border-radius: 8px;
+				font-size: 14px;
+				font-family: inherit;
+				resize: vertical;
+				min-height: 100px;
+				transition:
+					border-color 0.2s ease,
+					box-shadow 0.2s ease;
+			}
+
+			.rejection-textarea:focus {
+				outline: none;
+				border-color: #3b82f6;
+				box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+			}
+
+			.form-hint {
+				margin-top: 8px;
+				font-size: 12px;
+				color: #6b7280;
+				line-height: 1.4;
+			}
+
+			.modal-actions {
+				display: flex;
+				justify-content: flex-end;
+				gap: 12px;
+				padding-top: 16px;
+				border-top: 1px solid #e5e7eb;
+			}
+
+			.btn {
+				padding: 10px 20px;
+				border-radius: 6px;
+				font-size: 14px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: all 0.2s ease;
+				border: 1px solid;
+			}
+
+			.btn-secondary {
+				background: #f3f4f6;
+				color: #374151;
+				border-color: #d1d5db;
+			}
+
+			.btn-secondary:hover {
+				background: #e5e7eb;
+				border-color: #9ca3af;
+			}
+
+			.btn-danger {
+				background: #dc2626;
+				color: white;
+				border-color: #dc2626;
+			}
+
+			.btn-danger:hover:not(:disabled) {
+				background: #b91c1c;
+				border-color: #b91c1c;
+			}
+
+			.btn-danger:disabled {
+				background: #9ca3af;
+				border-color: #9ca3af;
+				cursor: not-allowed;
+				opacity: 0.6;
+			}
+
+			.hidden {
+				display: none;
+			}
+
+			.feature-list {
+				list-style: none;
+				padding: 0;
+			}
+
+			.feature-list li {
+				padding: 8px 0;
+				border-bottom: 1px solid #e5e7eb;
+			}
+
+			.feature-list li:last-child {
+				border-bottom: none;
+			}
+
+			.feature-list li::before {
+				content: '✅ ';
+				margin-right: 8px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>🎯 Modern Rejection Modal - Preview</h1>
+
+			<div class="demo-section">
+				<h3>📋 Features Implemented</h3>
+				<ul class="feature-list">
+					<li>Professional modal interface replacing browser prompt</li>
+					<li>Request context display for better decision-making</li>
+					<li>Required field validation with visual feedback</li>
+					<li>Accessibility support (keyboard navigation, ARIA labels)</li>
+					<li>Responsive design for mobile and desktop</li>
+					<li>Consistent styling with existing application modals</li>
+					<li>Proper error handling and state management</li>
+					<li>Form validation preventing empty submissions</li>
+				</ul>
+			</div>
+
+			<div class="demo-section">
+				<h3>🖥️ Modal Preview</h3>
+				<p>Click the button below to see the rejection modal in action:</p>
+				<br />
+				<button class="demo-button" onclick="openModal()">❌ Demo Rejection Modal</button>
+			</div>
+
+			<div class="demo-section">
+				<h3>📝 Implementation Details</h3>
+				<p><strong>Before:</strong> Simple browser prompt with no context or validation</p>
+				<p>
+					<strong>After:</strong> Professional modal with request details, validation, and better UX
+				</p>
+				<br />
+				<p><strong>Key Benefits:</strong></p>
+				<ul style="margin-left: 20px">
+					<li>Shows request context (employee, dates, type)</li>
+					<li>Requires meaningful rejection reason</li>
+					<li>Prevents accidental submissions</li>
+					<li>Maintains design consistency</li>
+					<li>Improved accessibility</li>
+				</ul>
+			</div>
+		</div>
+
+		<!-- Rejection Modal -->
+		<div id="rejectionModal" class="modal-overlay hidden">
+			<div class="modal-content rejection-modal">
+				<div class="modal-header">
+					<h3>❌ Tolak Pengajuan Cuti/Izin - John Doe</h3>
+					<button class="btn-close" onclick="closeModal()">✖️</button>
+				</div>
+				<div class="modal-body">
+					<div class="rejection-info">
+						<div class="info-row">
+							<span class="label">📅 Periode:</span>
+							<span class="value">2024-01-15 - 2024-01-17</span>
+						</div>
+						<div class="info-row">
+							<span class="label">📝 Jenis:</span>
+							<span class="value">Cuti Tahunan</span>
+						</div>
+						<div class="info-row">
+							<span class="label">📄 Keterangan:</span>
+							<span class="value">Acara keluarga penting yang tidak bisa ditunda</span>
+						</div>
+					</div>
+
+					<div class="rejection-form">
+						<label for="rejectionReason" class="form-label">
+							<span class="required">*</span> Alasan Penolakan:
+						</label>
+						<textarea
+							id="rejectionReason"
+							placeholder="Masukkan alasan penolakan yang jelas dan spesifik..."
+							rows="4"
+							class="rejection-textarea"
+							oninput="validateForm()"
+							required
+						></textarea>
+						<p class="form-hint">
+							💡 Alasan penolakan akan dilihat oleh karyawan untuk memahami mengapa pengajuan
+							ditolak.
+						</p>
+					</div>
+
+					<div class="modal-actions">
+						<button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+						<button id="submitBtn" class="btn btn-danger" onclick="submitRejection()" disabled>
+							❌ Tolak Pengajuan
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			function openModal() {
+				document.getElementById('rejectionModal').classList.remove('hidden');
+				document.getElementById('rejectionReason').focus();
+			}
+
+			function closeModal() {
+				document.getElementById('rejectionModal').classList.add('hidden');
+				document.getElementById('rejectionReason').value = '';
+				validateForm();
+			}
+
+			function validateForm() {
+				const reason = document.getElementById('rejectionReason').value.trim();
+				const submitBtn = document.getElementById('submitBtn');
+				submitBtn.disabled = !reason;
+			}
+
+			function submitRejection() {
+				const reason = document.getElementById('rejectionReason').value.trim();
+				if (!reason) {
+					alert('Mohon masukkan alasan penolakan');
+					return;
+				}
+
+				alert(
+					`✅ Simulasi berhasil!\n\nPengajuan ditolak dengan alasan:\n"${reason}"\n\nDalam aplikasi sesungguhnya, ini akan:\n- Mengirim data ke server\n- Memperbarui status pengajuan\n- Mengirim notifikasi ke karyawan\n- Menutup modal dan refresh data`
+				);
+				closeModal();
+			}
+
+			// Close modal when clicking outside
+			document.getElementById('rejectionModal').addEventListener('click', function (e) {
+				if (e.target === this) {
+					closeModal();
+				}
+			});
+
+			// Close modal with Escape key
+			document.addEventListener('keydown', function (e) {
+				if (
+					e.key === 'Escape' &&
+					!document.getElementById('rejectionModal').classList.contains('hidden')
+				) {
+					closeModal();
+				}
+			});
+		</script>
+	</body>
+</html>

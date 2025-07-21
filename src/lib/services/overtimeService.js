@@ -124,37 +124,104 @@ export async function updateOvertimeRequest(id, updates) {
 }
 
 /**
- * Approve pengajuan lembur
+ * Approve pengajuan lembur menggunakan multi-level approval
+ * @param {object} request - Data pengajuan
+ */
+export async function approveOvertimeRequestMultiLevel(request) {
+	try {
+		// Import approval service
+		const { approveOvertimeAtStage, getCurrentUserApprovalLevel, canApproveAtStage } = await import(
+			'./overtimeApprovalService.js'
+		);
+
+		const userLevel = getCurrentUserApprovalLevel();
+		const currentStage = request.approval_stage || 'pending';
+
+		console.log('🔍 DEBUG approveOvertimeRequestMultiLevel:', {
+			requestId: request.id,
+			userLevel,
+			currentStage,
+			canApprove: canApproveAtStage(request, currentStage)
+		});
+
+		if (!canApproveAtStage(request, currentStage)) {
+			return {
+				success: false,
+				error: 'Anda tidak memiliki wewenang untuk menyetujui pengajuan lembur ini'
+			};
+		}
+
+		const result = await approveOvertimeAtStage(request, userLevel);
+		return result;
+	} catch (error) {
+		console.error('Error in approveOvertimeRequestMultiLevel:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Terjadi kesalahan saat menyetujui pengajuan'
+		};
+	}
+}
+
+/**
+ * Reject pengajuan lembur menggunakan multi-level approval
+ * @param {object} request - Data pengajuan
+ * @param {string} reason - Alasan penolakan
+ */
+export async function rejectOvertimeRequestMultiLevel(request, reason = '') {
+	try {
+		// Import approval service
+		const { rejectOvertimeAtStage, getCurrentUserApprovalLevel, canApproveAtStage } = await import(
+			'./overtimeApprovalService.js'
+		);
+
+		const userLevel = getCurrentUserApprovalLevel();
+		const currentStage = request.approval_stage || 'pending';
+
+		console.log('🔍 DEBUG rejectOvertimeRequestMultiLevel:', {
+			requestId: request.id,
+			userLevel,
+			currentStage,
+			reason,
+			canApprove: canApproveAtStage(request, currentStage)
+		});
+
+		if (!canApproveAtStage(request, currentStage)) {
+			return {
+				success: false,
+				error: 'Anda tidak memiliki wewenang untuk menolak pengajuan lembur ini'
+			};
+		}
+
+		const result = await rejectOvertimeAtStage(request, userLevel, reason);
+		return result;
+	} catch (error) {
+		console.error('Error in rejectOvertimeRequestMultiLevel:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Terjadi kesalahan saat menolak pengajuan'
+		};
+	}
+}
+
+/**
+ * Approve pengajuan lembur (backward compatibility)
  * @param {object} request - Data pengajuan
  * @param {string} approvedBy - Nama yang menyetujui
  */
 export async function approveOvertimeRequest(request, approvedBy = 'HR Manager') {
-	const updates = {
-		status: 'approved',
-		approved_by: approvedBy,
-		approved_date: new Date().toISOString().split('T')[0],
-		date_updated: new Date().toISOString()
-	};
-
-	return await updateOvertimeRequest(request.id, updates);
+	// Use new multi-level approval system
+	return await approveOvertimeRequestMultiLevel(request);
 }
 
 /**
- * Reject pengajuan lembur
+ * Reject pengajuan lembur (backward compatibility)
  * @param {object} request - Data pengajuan
  * @param {string} rejectedBy - Nama yang menolak
  * @param {string} reason - Alasan penolakan
  */
 export async function rejectOvertimeRequest(request, rejectedBy = 'HR Manager', reason = '') {
-	const updates = {
-		status: 'rejected',
-		approved_by: rejectedBy,
-		approved_date: new Date().toISOString().split('T')[0],
-		rejection_reason: reason,
-		date_updated: new Date().toISOString()
-	};
-
-	return await updateOvertimeRequest(request.id, updates);
+	// Use new multi-level approval system
+	return await rejectOvertimeRequestMultiLevel(request, reason);
 }
 
 /**
@@ -294,14 +361,19 @@ function getMockOvertimeRequests() {
 			user_id: 'EMP001',
 			email: 'john.doe@company.com',
 			nama: 'John Doe',
+			divisi: 'IT',
 			tanggal: '2025-07-05',
+			jam_masuk: '08:00',
+			jam_keluar: '20:30',
 			durasi_jam: 3,
 			durasi_menit: 30,
 			deskripsi: 'Menyelesaikan project urgent untuk client ABC',
+			lampiran_foto_opsional: null, // No attachment for this record
 			status: 'pending',
 			tanggal_pengajuan: '2025-07-03',
 			employee_name: 'John Doe',
 			employee_email: 'john.doe@company.com',
+			employee_division: 'IT',
 			overtime_date: '2025-07-05',
 			duration_hours: 3,
 			duration_minutes: 30,
@@ -314,16 +386,21 @@ function getMockOvertimeRequests() {
 			user_id: 'EMP002',
 			email: 'jane.smith@company.com',
 			nama: 'Jane Smith',
+			divisi: 'Finance',
 			tanggal: '2025-07-04',
+			jam_masuk: '09:00',
+			jam_keluar: '18:00',
 			durasi_jam: 2,
 			durasi_menit: 0,
 			deskripsi: 'Meeting dengan vendor dan persiapan presentasi',
+			lampiran_foto_opsional: 'dcdd8c93-7a06-47a8-a064-cb0b7aee2ddd', // Sample UUID - will construct proper URL
 			status: 'approved',
 			tanggal_pengajuan: '2025-07-02',
 			approved_by: 'HR Manager',
 			approved_date: '2025-07-03',
 			employee_name: 'Jane Smith',
 			employee_email: 'jane.smith@company.com',
+			employee_division: 'Finance',
 			overtime_date: '2025-07-04',
 			duration_hours: 2,
 			duration_minutes: 0,
@@ -336,10 +413,14 @@ function getMockOvertimeRequests() {
 			user_id: 'EMP003',
 			email: 'bob.johnson@company.com',
 			nama: 'Bob Johnson',
+			divisi: 'Maintenance',
 			tanggal: '2025-07-03',
+			jam_masuk: '07:30',
+			jam_keluar: '19:45',
 			durasi_jam: 4,
 			durasi_menit: 15,
 			deskripsi: 'Maintenance server dan backup data',
+			lampiran_foto_opsional: 'https://picsum.photos/800/600?random=1', // Sample image URL for testing
 			status: 'rejected',
 			tanggal_pengajuan: '2025-07-01',
 			approved_by: 'HR Manager',
@@ -347,6 +428,7 @@ function getMockOvertimeRequests() {
 			rejection_reason: 'Tidak sesuai dengan kebijakan overtime',
 			employee_name: 'Bob Johnson',
 			employee_email: 'bob.johnson@company.com',
+			employee_division: 'Maintenance',
 			overtime_date: '2025-07-03',
 			duration_hours: 4,
 			duration_minutes: 15,

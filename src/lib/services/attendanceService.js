@@ -140,6 +140,7 @@ export class AttendanceService {
 			const defaultParams = {
 				sort: '-tanggal,-waktu_masuk', // Sort by date and check-in time (newest first)
 				limit: 100,
+				fields: '*', // Fetch all fields including edited and edited_at
 				...params
 			};
 
@@ -162,7 +163,9 @@ export class AttendanceService {
 						waktu_masuk: '2025-07-02T08:15:25.354Z',
 						waktu_keluar: '2025-07-02T17:30:00.000Z',
 						terlambat: false,
-						menit_keterlambatan: 0
+						menit_keterlambatan: 0,
+						edited: false,
+						edited_at: null
 					},
 					{
 						id: 2,
@@ -176,7 +179,9 @@ export class AttendanceService {
 						waktu_masuk: '2025-07-02T07:45:10.000Z',
 						waktu_keluar: '2025-07-02T17:15:30.000Z',
 						terlambat: false,
-						menit_keterlambatan: 0
+						menit_keterlambatan: 0,
+						edited: true,
+						edited_at: '2025-07-02T10:30:00.000Z'
 					},
 					{
 						id: 3,
@@ -190,7 +195,9 @@ export class AttendanceService {
 						waktu_masuk: '2025-07-02T09:30:45.000Z',
 						waktu_keluar: null,
 						terlambat: true,
-						menit_keterlambatan: 90
+						menit_keterlambatan: 90,
+						edited: false,
+						edited_at: null
 					}
 				],
 				meta: {
@@ -279,7 +286,24 @@ export class AttendanceService {
 	 */
 	static async updateAttendance(id, data) {
 		try {
-			return await directusService.updateItem('absensi_karyawan', id, data);
+			console.log('=== DEBUG UPDATE ATTENDANCE ===');
+			console.log('Updating attendance ID:', id);
+			console.log('Update data being sent:', data);
+
+			const response = await directusService.updateItem('absensi_karyawan', id, data);
+
+			console.log('Update response received:', response);
+
+			// Verify the update by fetching the updated record
+			if (response && response.data) {
+				console.log('Updated record from API:', response.data);
+				console.log('Edited fields in response:', {
+					edited: response.data.edited,
+					edited_at: response.data.edited_at
+				});
+			}
+
+			return response;
 		} catch (error) {
 			console.error('Error updating attendance:', error);
 			throw error;
@@ -323,6 +347,45 @@ export class AttendanceService {
 			return await directusService.createItem('absensi_karyawan', data);
 		} catch (error) {
 			console.error('Error creating attendance:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Test function to verify edited fields exist in database
+	 */
+	static async testEditedFields() {
+		try {
+			console.log('=== TESTING EDITED FIELDS ===');
+
+			// Get first record to check schema
+			const response = await directusService.getItems('absensi_karyawan', {
+				limit: 1,
+				fields: '*'
+			});
+
+			if (response && response.data && response.data.length > 0) {
+				const firstRecord = response.data[0];
+				console.log('First record fields:', Object.keys(firstRecord));
+				console.log('Has edited field:', 'edited' in firstRecord);
+				console.log('Has edited_at field:', 'edited_at' in firstRecord);
+				console.log('Sample record:', firstRecord);
+
+				return {
+					hasEditedField: 'edited' in firstRecord,
+					hasEditedAtField: 'edited_at' in firstRecord,
+					sampleRecord: firstRecord
+				};
+			} else {
+				console.log('No records found to test');
+				return {
+					hasEditedField: false,
+					hasEditedAtField: false,
+					sampleRecord: null
+				};
+			}
+		} catch (error) {
+			console.error('Error testing edited fields:', error);
 			throw error;
 		}
 	}

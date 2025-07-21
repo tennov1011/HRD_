@@ -25,6 +25,7 @@
 		waktu_masuk: '',
 		waktu_keluar: '',
 		lokasi: '',
+		lokasi_keluar: '',
 		keterangan: '',
 		terlambat: false,
 		menit_keterlambatan: 0
@@ -62,8 +63,32 @@
 			}
 
 			const response = await AttendanceService.getDailyAttendance(params);
-			attendanceData = response.data || [];
+			let loadedData = response.data || [];
+
+			// Ensure all records have edited and edited_at fields
+			loadedData = loadedData.map((record) => ({
+				...record,
+				edited: record.edited || false,
+				edited_at: record.edited_at || null
+			}));
+
+			// Merge with localStorage backup if database doesn't have the edited status
+			attendanceData = mergeEditedStatusFromStorage(loadedData);
+
 			totalItems = response.meta?.total_count || attendanceData.length;
+
+			// Debug: Check if edited fields are present
+			console.log('=== DEBUG LOAD ATTENDANCE DATA ===');
+			console.log('Total records loaded:', attendanceData.length);
+			console.log('Sample data (first record):', attendanceData[0]);
+			console.log('First record edited fields:', {
+				edited: attendanceData[0]?.edited,
+				edited_at: attendanceData[0]?.edited_at
+			});
+
+			// Check how many records have been edited
+			const editedCount = attendanceData.filter((record) => record.edited === true).length;
+			console.log(`Records with edited=true: ${editedCount}/${attendanceData.length}`);
 		} catch (err) {
 			error = err.message;
 			console.error('Error loading attendance data:', err);
@@ -152,6 +177,86 @@
 		}
 	}
 
+	function formatEditedTimestamp(timestamp) {
+		if (!timestamp) return 'waktu tidak diketahui';
+		try {
+			return new Date(timestamp).toLocaleString('id-ID', {
+				day: '2-digit',
+				month: 'short',
+				year: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
+		} catch (error) {
+			return 'waktu tidak valid';
+		}
+	}
+
+	// Functions for local storage backup of edited status
+	function getEditedStatusFromStorage() {
+		if (typeof window !== 'undefined') {
+			try {
+				const stored = localStorage.getItem('attendance_edited_status');
+				return stored ? JSON.parse(stored) : {};
+			} catch (error) {
+				console.warn('Error reading edited status from localStorage:', error);
+				return {};
+			}
+		}
+		return {};
+	}
+
+	function saveEditedStatusToStorage(attendanceId, editedAt) {
+		if (typeof window !== 'undefined') {
+			try {
+				const editedStatus = getEditedStatusFromStorage();
+				editedStatus[attendanceId] = {
+					edited: true,
+					edited_at: editedAt
+				};
+				localStorage.setItem('attendance_edited_status', JSON.stringify(editedStatus));
+			} catch (error) {
+				console.warn('Error saving edited status to localStorage:', error);
+			}
+		}
+	}
+
+	function mergeEditedStatusFromStorage(attendanceRecords) {
+		const editedStatus = getEditedStatusFromStorage();
+		return attendanceRecords.map((record) => {
+			const storedStatus = editedStatus[record.id];
+			if (storedStatus && (!record.edited || !record.edited_at)) {
+				return {
+					...record,
+					edited: storedStatus.edited,
+					edited_at: storedStatus.edited_at
+				};
+			}
+			return record;
+		});
+	}
+
+	// Function to clean old localStorage entries (optional)
+	function cleanOldEditedStatus() {
+		if (typeof window !== 'undefined') {
+			try {
+				const editedStatus = getEditedStatusFromStorage();
+				const currentAttendanceIds = attendanceData.map((record) => record.id);
+				const filteredStatus = {};
+
+				Object.keys(editedStatus).forEach((id) => {
+					if (currentAttendanceIds.includes(parseInt(id))) {
+						filteredStatus[id] = editedStatus[id];
+					}
+				});
+
+				localStorage.setItem('attendance_edited_status', JSON.stringify(filteredStatus));
+			} catch (error) {
+				console.warn('Error cleaning old edited status:', error);
+			}
+		}
+	}
+
 	function exportToExcel() {
 		try {
 			// Prepare data for export
@@ -171,9 +276,14 @@
 							minute: '2-digit'
 						})
 					: '',
-				Lokasi: item.lokasi || '',
+				'Lokasi Masuk': item.lokasi || '',
+				'Lokasi Keluar': item.lokasi_keluar || '',
 				Status: item.terlambat ? 'Terlambat' : 'Tepat Waktu',
 				'Menit Keterlambatan': item.menit_keterlambatan || 0,
+				'Foto Masuk': item.foto ? 'Ada' : 'Tidak Ada',
+				'Foto Keluar': item.foto_keluar ? 'Ada' : 'Tidak Ada',
+				'Data Diedit': item.edited ? 'Ya' : 'Tidak',
+				'Waktu Edit': item.edited_at ? new Date(item.edited_at).toLocaleString('id-ID') : '',
 				Keterangan: item.keterangan || ''
 			}));
 
@@ -188,9 +298,14 @@
 				{ width: 12 }, // Tanggal
 				{ width: 12 }, // Waktu Masuk
 				{ width: 12 }, // Waktu Keluar
-				{ width: 15 }, // Lokasi
+				{ width: 15 }, // Lokasi Masuk
+				{ width: 15 }, // Lokasi Keluar
 				{ width: 15 }, // Status
 				{ width: 18 }, // Menit Keterlambatan
+				{ width: 12 }, // Foto Masuk
+				{ width: 12 }, // Foto Keluar
+				{ width: 12 }, // Data Diedit
+				{ width: 20 }, // Waktu Edit
 				{ width: 25 } // Keterangan
 			];
 			ws['!cols'] = colWidths;
@@ -258,6 +373,35 @@
 		}
 	}
 
+	// Test function untuk verifikasi field edited di database
+	async function testEditedFields() {
+		console.log('=== TEST EDITED FIELDS ===');
+
+		try {
+			const result = await AttendanceService.testEditedFields();
+
+			let message = '📊 Test Field "edited" di Database:\n\n';
+			message += `✅ Field "edited" tersedia: ${result.hasEditedField ? 'YA' : 'TIDAK'}\n`;
+			message += `✅ Field "edited_at" tersedia: ${result.hasEditedAtField ? 'YA' : 'TIDAK'}\n\n`;
+
+			if (result.hasEditedField && result.hasEditedAtField) {
+				message += '🎉 BAGUS! Field sudah tersedia di database.\n';
+				message += 'Label "Edited" akan tersimpan permanen setelah reload.';
+			} else {
+				message += '⚠️ Field belum tersedia di database.\n';
+				message += 'Silakan tambahkan field berikut di Directus:\n';
+				message += '• edited (Boolean, default: false)\n';
+				message += '• edited_at (Datetime, default: null)';
+			}
+
+			console.log('Field test result:', result);
+			alert(message);
+		} catch (error) {
+			console.error('Edited fields test failed:', error);
+			alert('❌ Test field gagal: ' + error.message);
+		}
+	}
+
 	// Watch for date changes
 	$: if (selectedDate) {
 		refreshData();
@@ -281,6 +425,7 @@
 			waktu_masuk: formatTimeForInput(attendance.waktu_masuk),
 			waktu_keluar: formatTimeForInput(attendance.waktu_keluar),
 			lokasi: attendance.lokasi || '',
+			lokasi_keluar: attendance.lokasi_keluar || '',
 			keterangan: attendance.keterangan || '',
 			terlambat: attendance.terlambat || false,
 			menit_keterlambatan: attendance.menit_keterlambatan || 0
@@ -380,9 +525,12 @@
 					? formatDateTimeForAPI(editForm.tanggal, editForm.waktu_keluar)
 					: null,
 				lokasi: editForm.lokasi?.trim() || null,
+				lokasi_keluar: editForm.lokasi_keluar?.trim() || null,
 				keterangan: editForm.keterangan?.trim() || null,
 				terlambat: editForm.terlambat,
-				menit_keterlambatan: editForm.terlambat ? editForm.menit_keterlambatan || 0 : 0
+				menit_keterlambatan: editForm.terlambat ? editForm.menit_keterlambatan || 0 : 0,
+				edited: true,
+				edited_at: new Date().toISOString()
 			};
 
 			// Debug: Log untuk troubleshooting
@@ -402,11 +550,24 @@
 			const response = await AttendanceService.updateAttendance(editingAttendance.id, updatedData);
 
 			if (response) {
-				// Update local data
+				// Save to localStorage as backup
+				saveEditedStatusToStorage(editingAttendance.id, updatedData.edited_at);
+
+				// Update local data with all the updated fields
 				const index = attendanceData.findIndex((item) => item.id === editingAttendance.id);
 				if (index !== -1) {
-					attendanceData[index] = { ...attendanceData[index], ...updatedData };
+					// Merge the updated data while preserving existing fields
+					attendanceData[index] = {
+						...attendanceData[index],
+						...updatedData,
+						// Ensure these fields are properly set
+						edited: true,
+						edited_at: updatedData.edited_at
+					};
 					attendanceData = [...attendanceData]; // Trigger reactivity
+
+					// Debug: Log the updated record
+					console.log('Updated local record:', attendanceData[index]);
 				}
 
 				closeEditModal();
@@ -429,12 +590,94 @@
 		);
 	}
 
-	function viewPhoto(attendance) {
+	function viewPhoto(attendance, type = 'masuk') {
 		// Implementation for viewing photo
-		if (attendance.foto) {
+		let photoField, photoTitle;
+
+		if (type === 'keluar') {
+			photoField = attendance.foto_keluar;
+			photoTitle = 'Foto Keluar';
+		} else {
+			photoField = attendance.foto;
+			photoTitle = 'Foto Masuk';
+		}
+
+		if (photoField) {
 			// Open photo in new window or modal
-			const photoUrl = `${import.meta.env.VITE_DIRECTUS_URL}/assets/${attendance.foto}`;
-			window.open(photoUrl, '_blank', 'width=800,height=600');
+			const photoUrl = `${import.meta.env.VITE_DIRECTUS_URL}/assets/${photoField}`;
+			const newWindow = window.open(
+				'',
+				'_blank',
+				'width=800,height=600,scrollbars=yes,resizable=yes'
+			);
+
+			if (newWindow) {
+				newWindow.document.write(`
+					<html>
+						<head>
+							<title>${photoTitle} - ${attendance.nama}</title>
+							<style>
+								body { 
+									margin: 0; 
+									padding: 20px; 
+									font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+									background: #f5f5f5;
+									display: flex;
+									flex-direction: column;
+									align-items: center;
+								}
+								.photo-header {
+									background: white;
+									padding: 15px 20px;
+									border-radius: 8px;
+									margin-bottom: 20px;
+									box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+									text-align: center;
+									width: 100%;
+									max-width: 600px;
+								}
+								.photo-title {
+									font-size: 18px;
+									font-weight: 600;
+									color: #1e293b;
+									margin-bottom: 5px;
+								}
+								.photo-subtitle {
+									font-size: 14px;
+									color: #64748b;
+								}
+								.photo-container {
+									background: white;
+									padding: 10px;
+									border-radius: 8px;
+									box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+									max-width: 90vw;
+									max-height: 90vh;
+									overflow: auto;
+								}
+								img { 
+									max-width: 100%; 
+									height: auto; 
+									border-radius: 4px;
+									display: block;
+								}
+							</style>
+						</head>
+						<body>
+							<div class="photo-header">
+								<div class="photo-title">${photoTitle}</div>
+								<div class="photo-subtitle">${attendance.nama} - ${formatDate(attendance.tanggal)}</div>
+							</div>
+							<div class="photo-container">
+								<img src="${photoUrl}" alt="${photoTitle}" onload="window.focus();" />
+							</div>
+						</body>
+					</html>
+				`);
+				newWindow.document.close();
+			}
+		} else {
+			alert(`❌ ${photoTitle} tidak tersedia untuk presensi ini.`);
 		}
 	}
 
@@ -503,6 +746,7 @@
 		</div>
 		<div class="header-actions">
 			<button class="btn btn-secondary" on:click={exportToExcel}>📗 Export Excel </button>
+			<button class="btn btn-secondary" on:click={testEditedFields}>🔍 Test Fields</button>
 			<!-- <button class="btn btn-secondary" on:click={testTimeConversion}> 🔍 Test Time </button> -->
 			<!-- <button class="btn btn-secondary" on:click={testDirectusConnection}> 🔗 Test API </button> -->
 			<button class="btn btn-primary" on:click={refreshData}> 🔄 Refresh </button>
@@ -581,7 +825,8 @@
 							<th>Tanggal</th>
 							<th>Waktu Masuk</th>
 							<th>Waktu Keluar</th>
-							<th>Lokasi</th>
+							<th>Lokasi Masuk</th>
+							<th>Lokasi Keluar</th>
 							<th>Status</th>
 							<th>Keterlambatan</th>
 							<th>Aksi</th>
@@ -596,25 +841,68 @@
 											{attendance.nama ? attendance.nama.charAt(0).toUpperCase() : '?'}
 										</div>
 										<div class="employee-details">
-											<div class="employee-name">{attendance.nama || 'N/A'}</div>
+											<div class="employee-name">
+												{attendance.nama || 'N/A'}
+												{#if attendance.edited === true}
+													<span
+														class="edited-label"
+														title="Data telah diedit pada {formatEditedTimestamp(
+															attendance.edited_at
+														)}"
+													>
+														✏️ Edited
+													</span>
+												{/if}
+											</div>
 										</div>
 									</div>
 								</td>
 								<td>{attendance.email}</td>
 								<td>{formatDate(attendance.tanggal)}</td>
 								<td>
-									<span class="time-badge time-in">
-										{formatTime(attendance.waktu_masuk)}
-									</span>
+									<div class="time-with-photo">
+										<span class="time-badge time-in">
+											{formatTime(attendance.waktu_masuk)}
+										</span>
+										{#if attendance.foto}
+											<button
+												class="btn-photo-inline btn-photo-masuk"
+												title="Lihat Foto Masuk"
+												on:click={() => viewPhoto(attendance, 'masuk')}
+											>
+												📷
+											</button>
+										{/if}
+									</div>
 								</td>
 								<td>
-									<span class="time-badge time-out">
-										{formatTime(attendance.waktu_keluar)}
-									</span>
+									<div class="time-with-photo">
+										<span class="time-badge time-out">
+											{formatTime(attendance.waktu_keluar)}
+										</span>
+										{#if attendance.foto_keluar}
+											<button
+												class="btn-photo-inline btn-photo-keluar"
+												title="Lihat Foto Keluar"
+												on:click={() => viewPhoto(attendance, 'keluar')}
+											>
+												📷
+											</button>
+										{/if}
+									</div>
 								</td>
 								<td>
 									<div class="location-info" title={attendance.lokasi}>
 										📍 {attendance.lokasi || 'Lokasi tidak tersedia'}
+									</div>
+								</td>
+								<td>
+									<div class="location-info" title={attendance.lokasi_keluar}>
+										{#if attendance.lokasi_keluar}
+											📍 {attendance.lokasi_keluar}
+										{:else}
+											<span class="no-location">-</span>
+										{/if}
 									</div>
 								</td>
 								<td>
@@ -633,22 +921,6 @@
 								</td>
 								<td>
 									<div class="action-buttons">
-										{#if attendance.foto}
-											<button
-												class="btn-action btn-photo"
-												title="Lihat Foto"
-												on:click={() => viewPhoto(attendance)}
-											>
-												📷
-											</button>
-											<!-- <button
-                                        class="btn-action btn-detail"
-                                        title="Lihat Detail"
-                                        on:click={() => viewDetails(attendance)}
-                                    >
-                                        👁️
-                                    </button> -->
-										{/if}
 										<button
 											class="btn-action btn-edit"
 											title="Edit Data Presensi"
@@ -814,15 +1086,27 @@
 								</div>
 							{/if}
 
-							<!-- Lokasi -->
-							<div class="form-group full-width">
-								<label for="edit-lokasi">Lokasi:</label>
+							<!-- Lokasi Masuk -->
+							<div class="form-group">
+								<label for="edit-lokasi">Lokasi Masuk:</label>
 								<input
 									id="edit-lokasi"
 									type="text"
 									bind:value={editForm.lokasi}
 									class="form-input"
-									placeholder="Masukkan lokasi presensi"
+									placeholder="Masukkan lokasi check-in"
+								/>
+							</div>
+
+							<!-- Lokasi Keluar -->
+							<div class="form-group">
+								<label for="edit-lokasi-keluar">Lokasi Keluar:</label>
+								<input
+									id="edit-lokasi-keluar"
+									type="text"
+									bind:value={editForm.lokasi_keluar}
+									class="form-input"
+									placeholder="Masukkan lokasi check-out"
 								/>
 							</div>
 
@@ -1059,89 +1343,82 @@
 		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 	}
 
-	.results-info {
+	/* Time with Photo Container */
+	.time-with-photo {
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		gap: 8px;
+		justify-content: flex-start;
 	}
 
-	.results-count {
-		font-size: 14px;
-		color: #64748b;
+	.time-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 4px 8px;
+		border-radius: 6px;
+		font-size: 12px;
 		font-weight: 500;
+		background: #f1f5f9;
+		color: #475569;
+		border: 1px solid #e2e8f0;
 	}
 
-	.content-section {
-		background: white;
-		border-radius: 16px;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		overflow: hidden;
+	.time-badge.time-in {
+		background: #dcfce7;
+		color: #166534;
+		border-color: #bbf7d0;
 	}
 
-	.loading-state,
-	.error-state,
-	.empty-state {
-		padding: 60px 20px;
-		text-align: center;
+	.time-badge.time-out {
+		background: #fef3c7;
+		color: #92400e;
+		border-color: #fde68a;
 	}
 
-	.loading-spinner {
-		width: 40px;
-		height: 40px;
-		border: 3px solid #f3f4f6;
-		border-top: 3px solid #3b82f6;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-		margin: 0 auto 16px;
-	}
-
-	@keyframes spin {
-		0% {
-			transform: rotate(0deg);
-		}
-		100% {
-			transform: rotate(360deg);
-		}
-	}
-
-	.error-icon,
-	.empty-icon {
-		font-size: 48px;
-		margin-bottom: 16px;
-	}
-
-	.table-container {
-		overflow-x: auto;
-	}
-
-	.attendance-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.attendance-table th,
-	.attendance-table td {
-		padding: 12px;
-		text-align: left;
-		border-bottom: 1px solid #f1f5f9;
-	}
-
-	.attendance-table th {
+	/* Inline Photo Buttons */
+	.btn-photo-inline {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 6px;
+		font-size: 12px;
+		cursor: pointer;
+		transition: all 0.2s ease;
 		background: #f8fafc;
-		font-weight: 600;
-		color: #374151;
-		font-size: 14px;
+		border: 1px solid #e2e8f0;
 	}
 
-	.attendance-table td {
-		font-size: 14px;
-		color: #64748b;
+	.btn-photo-inline:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	}
 
-	.attendance-table tr:hover {
-		background: #f8fafc;
+	.btn-photo-masuk {
+		background: #dcfce7;
+		color: #166534;
+		border-color: #bbf7d0;
 	}
 
+	.btn-photo-masuk:hover {
+		background: #bbf7d0;
+		border-color: #86efac;
+	}
+
+	.btn-photo-keluar {
+		background: #fef3c7;
+		color: #92400e;
+		border-color: #fde68a;
+	}
+
+	.btn-photo-keluar:hover {
+		background: #fde68a;
+		border-color: #fcd34d;
+	}
+
+	/* Employee Info Styles */
 	.employee-info {
 		display: flex;
 		align-items: center;
@@ -1149,137 +1426,191 @@
 	}
 
 	.employee-avatar {
-		width: 36px;
-		height: 36px;
-		background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-		border-radius: 8px;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: white;
-		font-weight: 600;
 		font-size: 14px;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+
+	.employee-details {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.employee-name {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px;
 		font-weight: 500;
 		color: #1e293b;
-	}
-
-	.time-badge {
-		padding: 4px 8px;
-		border-radius: 6px;
-		font-size: 12px;
-		font-weight: 500;
-		font-family: monospace;
-	}
-
-	.time-in {
-		background: #dcfce7;
-		color: #166534;
-	}
-
-	.time-out {
-		background: #fef3c7;
-		color: #92400e;
-	}
-
-	.location-info {
-		max-width: 200px;
+		font-size: 14px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		font-size: 12px;
 	}
 
+	.edited-label {
+		display: inline-block;
+		background: #fef3c7;
+		color: #92400e;
+		font-size: 10px;
+		font-weight: 600;
+		padding: 2px 6px;
+		border-radius: 4px;
+		margin-left: 8px;
+		border: 1px solid #fbbf24;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: help;
+	}
+
+	/* Location Info */
+	.location-info {
+		font-size: 12px;
+		color: #64748b;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 150px;
+	}
+
+	/* Status Badge */
 	.status-badge {
-		padding: 4px 12px;
-		border-radius: 20px;
-		font-size: 12px;
+		display: inline-flex;
+		align-items: center;
+		padding: 4px 8px;
+		border-radius: 12px;
+		font-size: 11px;
 		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
 	}
 
-	.status-ontime {
+	.status-badge.status-ontime {
 		background: #dcfce7;
 		color: #166534;
+		border: 1px solid #bbf7d0;
 	}
 
-	.status-late {
+	.status-badge.status-late {
 		background: #fee2e2;
-		color: #991b1b;
+		color: #dc2626;
+		border: 1px solid #fecaca;
 	}
 
+	/* Late Duration */
 	.late-duration {
 		color: #dc2626;
 		font-weight: 500;
 		font-size: 12px;
+		background: #fee2e2;
+		padding: 2px 6px;
+		border-radius: 4px;
+		border: 1px solid #fecaca;
 	}
 
 	.no-late {
-		color: #9ca3af;
+		color: #64748b;
+		font-size: 12px;
 	}
 
+	/* Action Buttons */
 	.action-buttons {
 		display: flex;
-		gap: 6px;
+		gap: 4px;
 		justify-content: center;
+		align-items: center;
 	}
 
 	.btn-action {
-		width: 32px;
-		height: 32px;
-		border: none;
-		border-radius: 8px;
-		background: #f1f5f9;
-		cursor: pointer;
-		font-size: 14px;
-		transition: all 0.2s ease;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		position: relative;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 6px;
+		font-size: 12px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
 	}
 
 	.btn-action:hover {
-		background: #e2e8f0;
-		transform: scale(1.05);
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	}
 
-	.btn-detail {
-		background: #e0f2fe !important;
-		color: #0369a1 !important;
+	.btn-action.btn-edit {
+		background: #dbeafe;
+		color: #1d4ed8;
+		border-color: #bfdbfe;
 	}
 
-	.btn-detail:hover {
-		background: #bae6fd !important;
+	.btn-action.btn-edit:hover {
+		background: #bfdbfe;
+		border-color: #93c5fd;
 	}
 
-	.btn-photo {
-		background: #f3e8ff !important;
-		color: #7c2d12 !important;
+	.btn-action.btn-delete {
+		background: #fee2e2;
+		color: #dc2626;
+		border-color: #fecaca;
 	}
 
-	.btn-photo:hover {
-		background: #e9d5ff !important;
+	.btn-action.btn-delete:hover {
+		background: #fecaca;
+		border-color: #f87171;
 	}
 
-	.btn-edit {
-		background: #fef3c7 !important;
-		color: #92400e !important;
+	/* Table Styles */
+	.table-container {
+		background: white;
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+		border: 1px solid #e2e8f0;
 	}
 
-	.btn-edit:hover {
-		background: #fde68a !important;
+	.attendance-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 14px;
 	}
 
-	.btn-delete {
-		background: #fee2e2 !important;
-		color: #991b1b !important;
+	.attendance-table th {
+		background: #f8fafc;
+		padding: 12px 16px;
+		text-align: left;
+		font-weight: 600;
+		color: #475569;
+		border-bottom: 1px solid #e2e8f0;
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
 	}
 
-	.btn-delete:hover {
-		background: #fecaca !important;
+	.attendance-table td {
+		padding: 12px 16px;
+		border-bottom: 1px solid #f1f5f9;
+		vertical-align: middle;
+	}
+
+	.attendance-table tbody tr:hover {
+		background: #f8fafc;
+	}
+
+	.attendance-table tbody tr:last-child td {
+		border-bottom: none;
 	}
 
 	/* Modal Styles */
