@@ -3,7 +3,7 @@ import { fail } from '@sveltejs/kit';
 import { recruitmentService } from '$lib/services/recruitmentService';
 import { applicantService } from '$lib/services/applicantService';
 
-/** @type {import('./$types').PageServerLoad} */
+/** @type {import('../$types').PageServerLoad} */
 export async function load() {
     try {
         // Get all job postings 
@@ -60,7 +60,7 @@ export async function load() {
     }
 }
 
-/** @type {import('./$types').Actions} */
+/** @type {import('../$types').Actions} */
 export const actions = {
     // Toggle job posting status
     toggleStatus: async ({ request }) => {

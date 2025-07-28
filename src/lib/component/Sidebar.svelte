@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
+	import { onMount } from 'svelte';
 
 	/**
 	 * @typedef {Object} MenuItem
@@ -27,10 +28,11 @@
 			label: 'Kehadiran',
 			icon: '⏰',
 			hasDropdown: true,
-			subMenus: [
-				{ label: 'Presensi Harian', href: '/attendance/daily', icon: '📅' },
-				{ label: 'Presensi Bulanan', href: '/attendance/monthly', icon: '📊' }
-			]
+				subMenus: [
+					{ label: 'Presensi Harian', href: '/attendance/daily', icon: '📅' },
+					{ label: 'Presensi Bulanan', href: '/attendance/monthly', icon: '📊' },
+					{ label: 'Daftar Libur', href: '/attendance/holidays', icon: '🏖️' },
+				]
 		},
 		{
 			label: 'Pengajuan Karyawan',
@@ -60,7 +62,7 @@
 			icon: '📝',
 			subMenus: [
 				{ label: 'Tambah Lowongan', href: '/recruitment/add', icon: '➕' },
-				{ label: 'Daftar Lowongan', href: '/recruitment', icon: '📢' },
+				{ label: 'Daftar Lowongan', href: '/recruitment/list', icon: '📢' },
 				{ label: 'Detail Lowongan', href: '/recruitment/applications', icon: '👤' },
 				{ label: 'Daftar Pelamar', href: '/recruitment/candidates', icon: '👥' }
 			]
@@ -81,7 +83,8 @@
 			hasDropdown: true,
 			icon: '📄',
 			subMenus: [
-				{ label: 'SOP', href: '/training/add', icon: '➕' },
+				{ label: 'Tambah Dokumen', href: '/documents/add', icon: '➕' },
+				{ label: 'Daftar Dokumen', href: '/documents/list', icon: '📊' },
 			]
 		}
 	];
@@ -92,25 +95,22 @@
 	/** @type {Record<number, boolean>} */
 	let expandedMenus = {};
 
-	// Initialize and manage dropdown state
+	// Initialize dropdown state only on first load
+	let initialized = false;
+	
 	$: {
-		const newExpandedMenus = { ...expandedMenus };
-		let hasChanges = false;
-
-		menuItems.forEach((item, index) => {
-			if (item.hasDropdown) {
-				const shouldExpand = isSubmenuActive(item.subMenus);
-
-				// Only update if there's a change to avoid infinite reactivity
-				if (shouldExpand && !newExpandedMenus[index]) {
+		// Only auto-expand on initial load, not on every route change
+		if (!initialized && currentPath) {
+			const newExpandedMenus = {};
+			
+			menuItems.forEach((item, index) => {
+				if (item.hasDropdown && isSubmenuActive(item.subMenus)) {
 					newExpandedMenus[index] = true;
-					hasChanges = true;
 				}
-			}
-		});
-
-		if (hasChanges) {
+			});
+			
 			expandedMenus = newExpandedMenus;
+			initialized = true;
 		}
 	}
 
@@ -130,6 +130,16 @@
 	 */
 	function closeAllDropdowns() {
 		expandedMenus = {};
+	}
+
+	/**
+	 * Close specific dropdown
+	 * @param {number} index
+	 */
+	function closeDropdown(index) {
+		const newState = { ...expandedMenus };
+		delete newState[index];
+		expandedMenus = newState;
 	}
 
 	/**
@@ -170,9 +180,46 @@
 			return false;
 		});
 	}
+
+	/**
+	 * Handle keyboard events
+	 * @param {KeyboardEvent} event
+	 */
+	function handleKeydown(event) {
+		if (event.key === 'Escape') {
+			closeAllDropdowns();
+		}
+	}
+
+	// Add global event listeners
+	onMount(() => {
+		// Add click outside listener
+		function handleClickOutsideGlobal(event) {
+			const sidebar = event.target?.closest('.sidebar');
+			if (!sidebar) {
+				closeAllDropdowns();
+			}
+		}
+
+		// Add keyboard listener for ESC key only
+		function handleKeydownGlobal(event) {
+			if (event.key === 'Escape') {
+				closeAllDropdowns();
+			}
+		}
+
+		document.addEventListener('click', handleClickOutsideGlobal);
+		document.addEventListener('keydown', handleKeydownGlobal);
+
+		// Cleanup
+		return () => {
+			document.removeEventListener('click', handleClickOutsideGlobal);
+			document.removeEventListener('keydown', handleKeydownGlobal);
+		};
+	});
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" role="navigation" tabindex="-1" on:keydown={handleKeydown}>
 	<!-- Header -->
 	<div class="sidebar-header">
 		<div class="logo">

@@ -36,44 +36,28 @@
 	// Loading state
 	let isLoading = false;
 
-	// Computed filtered employees
-	$: filteredEmployees = employees.filter((employee) => {
-		// Jika tidak ada search query, hanya filter berdasarkan divisi dan status
-		if (!searchQuery.trim()) {
-			// Normalisasi divisi untuk perbandingan
-			const normalizedDivisi = employee.divisi?.toLowerCase()?.trim();
-			const matchesDivisi = selectedDivisi === '' || normalizedDivisi === selectedDivisi;
 
-			// Normalisasi status kerja untuk perbandingan
-			const normalizedStatus = employee.status_kerja?.toLowerCase()?.trim();
-			const matchesStatus = selectedStatusKerja === '' || normalizedStatus === selectedStatusKerja;
-
-			return matchesDivisi && matchesStatus;
+// Computed filtered employees (search only by nama_lengkap, like recruitment/candidates)
+$: filteredEmployees = employees.filter((employee) => {
+	// Filter by search query (only by nama_lengkap)
+	if (searchQuery.trim() !== '') {
+		const query = searchQuery.toLowerCase();
+		const namaLengkap = (employee.nama_lengkap || '').toLowerCase();
+		if (!namaLengkap.includes(query)) {
+			return false;
 		}
+	}
 
-		// Search logic - fokus pada nama dan nomor karyawan
-		const searchTerm = searchQuery.toLowerCase().trim();
-		const namaLengkap = (employee.nama_lengkap || '').toLowerCase().trim();
-		const noKaryawan = (employee.no_karyawan || '').toLowerCase().trim();
-		const employeeId = (employee.id || '').toLowerCase().trim();
+	// Filter by divisi
+	const normalizedDivisi = employee.divisi?.toLowerCase()?.trim();
+	const matchesDivisi = selectedDivisi === '' || normalizedDivisi === selectedDivisi;
 
-		const matchesSearch =
-			namaLengkap.includes(searchTerm) ||
-			noKaryawan.includes(searchTerm) ||
-			employeeId.includes(searchTerm);
+	// Filter by status kerja
+	const normalizedStatus = employee.status_kerja?.toLowerCase()?.trim();
+	const matchesStatus = selectedStatusKerja === '' || normalizedStatus === selectedStatusKerja;
 
-		// Jika search tidak cocok, return false
-		if (!matchesSearch) return false;
-
-		// Filter divisi dan status hanya jika search cocok
-		const normalizedDivisi = employee.divisi?.toLowerCase()?.trim();
-		const matchesDivisi = selectedDivisi === '' || normalizedDivisi === selectedDivisi;
-
-		const normalizedStatus = employee.status_kerja?.toLowerCase()?.trim();
-		const matchesStatus = selectedStatusKerja === '' || normalizedStatus === selectedStatusKerja;
-
-		return matchesDivisi && matchesStatus;
-	});
+	return matchesDivisi && matchesStatus;
+});
 
 	// Reset to first page when filters change
 	$: if (searchQuery || selectedDivisi || selectedStatusKerja) {
@@ -297,46 +281,6 @@
 			</div>
 		</div>
 
-		<!-- User Access Info -->
-		{#if user}
-			<div class="mb-6 px-6">
-				<div
-					class="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4"
-				>
-					<div class="flex items-center">
-						<div class="flex-shrink-0">
-							<svg
-								class="h-6 w-6 text-blue-600"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-								/>
-							</svg>
-						</div>
-						<div class="ml-4 flex-1">
-							<h3 class="text-sm font-medium text-blue-900">
-								Masuk sebagai: {user.nama || user.email}
-							</h3>
-							<div class="mt-1 text-sm text-blue-700">
-								<span class="font-medium">Role:</span>
-								{user.role || 'User'} |
-								<span class="font-medium">Divisi:</span>
-								{getDivisionDisplayName(user.divisi || 'Tidak diketahui')}
-								{#if !userDivisionInfo.canViewAllDivisions}
-									| <span class="font-medium text-orange-600">Filter Aktif: Divisi Anda saja</span>
-								{/if}
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		{/if}
 
 		<!-- Error Message -->
 		{#if errorMessage}
@@ -661,7 +605,7 @@
 									<td class="px-6 py-4 whitespace-nowrap">
 										<span
 											class="inline-flex rounded-full px-3 py-1 text-xs font-medium
-                    {employee.status_kerja?.toLowerCase()?.trim() === 'tetap'
+					{employee.status_kerja?.toLowerCase()?.trim() === 'tetap'
 												? 'bg-green-100 text-green-800'
 												: employee.status_kerja?.toLowerCase()?.trim() === 'kontrak'
 													? 'bg-yellow-100 text-yellow-800'
@@ -680,7 +624,7 @@
 									<td class="px-6 py-4 whitespace-nowrap">
 										<span
 											class="inline-flex rounded-full px-3 py-1 text-xs font-medium
-                    {employee.shift === 'pagi'
+					{employee.shift === 'pagi'
 												? 'bg-orange-100 text-orange-800'
 												: employee.shift === 'siang'
 													? 'bg-yellow-100 text-yellow-800'
