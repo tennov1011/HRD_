@@ -45,6 +45,14 @@
 			]
 		},
 		{
+			label: 'Dashboard Admin',
+			icon: '📊',
+			hasDropdown: true,
+			subMenus: [
+				{ label: 'Dashboard Cuti Tahunan', href: '/admin/annual-leave-dashboard', icon: '🏖️' }
+			]
+		},
+		{
 			label: 'Master Data',
 			icon: '📂',
 			hasDropdown: true,
