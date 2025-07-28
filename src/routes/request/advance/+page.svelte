@@ -7,6 +7,24 @@
 		testAdvanceConnection,
 		getAdvanceStatistics
 	} from '$lib/services/advanceService.js';
+	import {
+		recordKasbonPayment,
+		getKasbonPaymentHistory
+	} from '$lib/services/kasbonPaymentServiceNew.js';
+	import {
+		approveKasbonRequestSingleLevel,
+		rejectKasbonRequestSingleLevel
+	} from '$lib/services/kasbonService.js';
+	import {
+		getCurrentUserApprovalLevel,
+		canApproveAtStage,
+		getAvailableActions,
+		getApprovalStatusSummary,
+		getStageDisplayName,
+		APPROVAL_STAGES
+	} from '$lib/services/kasbonApprovalService.js';
+	import { notifications, kasbonNotifications } from '$lib/stores/notificationStore.js';
+	import NotificationContainer from '$lib/component/NotificationContainer.svelte';
 
 	/** @type {any[]} */
 	let advanceRequests = [];
@@ -21,9 +39,85 @@
 	/** @type {any} */
 	let statistics = null;
 
-	$: filteredRequests = filterRequests(advanceRequests, searchTerm, statusFilter);
+	// Payment tracking variables
+	let showPaymentModal = false;
+	let showDetailModal = false;
+	/** @type {any} */
+	let selectedRequest = null;
+	let paymentAmount = 0;
+	let paymentDate = new Date().toISOString().split('T')[0];
+	let paymentNotes = '';
+	let paymentStatusFilter = 'all'; // all, on-track, overdue, completed
+	let paymentHistory = [];
+
+	// Approval tracking variables
+	let showRejectionModal = false;
+	/** @type {any} */
+	let rejectionRequest = null;
+	let rejectionReason = '';
+	let isApproving = false;
+	let isRejecting = false;
+
+	$: filteredRequests = filterRequests(
+		advanceRequests,
+		searchTerm,
+		statusFilter,
+		paymentStatusFilter
+	);
 	$: paginatedRequests = paginateData(filteredRequests, currentPage, itemsPerPage);
 	$: totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+
+	/**
+	 * Calculate payment progress for a request
+	 * @param {any} request
+	 */
+	function getPaymentProgress(request) {
+		const reqStatus = request.approval_stage || request.status;
+		if (reqStatus !== 'approved') {
+			return { percentage: 0, paidAmount: 0, remainingAmount: 0, isOverdue: false };
+		}
+
+		// Gunakan data dari Directus jika tersedia, fallback ke perhitungan manual
+		const totalAmount = request.amount || request.nominal || 0;
+		const totalPaid = request.total_paid || 0; // Dari field Directus
+		const paymentStatus = request.payment_status || 'pending'; // Dari field Directus
+
+		const remainingAmount = Math.max(0, totalAmount - totalPaid);
+		const percentage = totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
+
+		// Tentukan status overdue berdasarkan tanggal dan tenor
+		const monthlyPayment = request.monthly_payment || totalAmount / (request.tenor || 12);
+		const approvedDate = new Date(request.approved_date || request.tanggal_pengajuan);
+		const currentDate = new Date();
+
+		// Hitung berapa bulan yang sudah berlalu sejak disetujui
+		const monthsPassed = Math.floor(
+			(currentDate.getTime() - approvedDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+		);
+		const expectedPaidAmount = Math.min(monthsPassed * monthlyPayment, totalAmount);
+
+		// Overdue jika pembayaran kurang dari yang diharapkan sesuai jadwal
+		const isOverdue = totalPaid < expectedPaidAmount && percentage < 100;
+
+		// Hitung tanggal jatuh tempo berikutnya
+		const paymentsCount = Math.floor(totalPaid / monthlyPayment);
+		const nextPaymentDate = new Date(
+			approvedDate.getTime() + (paymentsCount + 1) * 30 * 24 * 60 * 60 * 1000
+		);
+
+		return {
+			percentage: Math.min(percentage, 100),
+			paidAmount: totalPaid,
+			remainingAmount,
+			isOverdue,
+			expectedPaidAmount,
+			monthsPassed,
+			nextPaymentDate,
+			paymentStatus,
+			monthlyPayment,
+			totalAmount
+		};
+	}
 
 	onMount(() => {
 		loadAdvanceRequests();
@@ -42,11 +136,13 @@
 			const result = await getAdvanceRequests();
 
 			if (result.success) {
-				advanceRequests = result.data;
+				// Filter dan validasi data untuk memastikan tidak ada null/undefined
+				advanceRequests = (result.data || []).filter((req) => req && req.id);
 				console.log('✅ Advance requests loaded from Directus');
 			} else {
 				console.warn('⚠️ Using fallback data for advance requests');
-				advanceRequests = result.data; // Fallback data
+				// Filter fallback data juga
+				advanceRequests = (result.data || []).filter((req) => req && req.id);
 			}
 		} catch (error) {
 			console.error('Error loading advance requests:', error);
@@ -73,12 +169,13 @@
 	}
 
 	/**
-	 * Filter requests based on search term and status
+	 * Filter requests based on search term, status, and payment status
 	 * @param {any[]} requests
 	 * @param {string} search
 	 * @param {string} status
+	 * @param {string} paymentStatus
 	 */
-	function filterRequests(requests, search, status) {
+	function filterRequests(requests, search, status, paymentStatus) {
 		let filtered = requests;
 
 		if (search) {
@@ -88,12 +185,35 @@
 					(req.employee_name || req.nama || '').toLowerCase().includes(searchLower) ||
 					(req.user_id || '').toLowerCase().includes(searchLower) ||
 					(req.description || req.keterangan || '').toLowerCase().includes(searchLower) ||
-					(req.employee_email || req.email || '').toLowerCase().includes(searchLower)
+					(req.employee_email || req.email || '').toLowerCase().includes(searchLower) ||
+					(req.employee_division || req.divisi || '').toLowerCase().includes(searchLower)
 			);
 		}
 
 		if (status !== 'all') {
-			filtered = filtered.filter((req) => req.status === status);
+			filtered = filtered.filter((req) => {
+				const reqStatus = req.approval_stage || req.status;
+				return reqStatus === status;
+			});
+		}
+
+		if (paymentStatus !== 'all') {
+			filtered = filtered.filter((req) => {
+				const reqStatus = req.approval_stage || req.status;
+				if (reqStatus !== 'approved') return false;
+
+				const paymentProgress = getPaymentProgress(req);
+				switch (paymentStatus) {
+					case 'completed':
+						return paymentProgress.percentage >= 100;
+					case 'on-track':
+						return paymentProgress.percentage < 100 && !paymentProgress.isOverdue;
+					case 'overdue':
+						return paymentProgress.percentage < 100 && paymentProgress.isOverdue;
+					default:
+						return true;
+				}
+			});
 		}
 
 		return filtered;
@@ -110,8 +230,9 @@
 		return data.slice(start, end);
 	}
 
-	/** @param {string} status */
-	function getStatusClass(status) {
+	/** @param {any} request */
+	function getStatusClass(request) {
+		const status = request.approval_stage || request.status;
 		switch (status) {
 			case 'pending':
 				return 'status-pending';
@@ -119,22 +240,27 @@
 				return 'status-approved';
 			case 'rejected':
 				return 'status-rejected';
+			case 'manager_hrd':
+				return 'status-approved';
 			default:
 				return 'status-pending';
 		}
 	}
 
-	/** @param {string} status */
-	function getStatusText(status) {
+	/** @param {any} request */
+	function getStatusText(request) {
+		const status = request.approval_stage || request.status;
 		switch (status) {
 			case 'pending':
-				return 'Menunggu';
+				return 'Menunggu Persetujuan';
 			case 'approved':
 				return 'Disetujui';
 			case 'rejected':
 				return 'Ditolak';
+			case 'manager_hrd':
+				return 'Disetujui Manager HRD';
 			default:
-				return 'Menunggu';
+				return 'Menunggu Persetujuan';
 		}
 	}
 
@@ -158,65 +284,55 @@
 	}
 
 	/**
-	 * Approve advance request
+	 * Approve kasbon request (Manager HRD only)
 	 * @param {any} request
 	 */
 	async function approveRequest(request) {
+		if (isApproving) return;
+
+		isApproving = true;
 		try {
-			const result = await approveAdvanceRequest(request);
+			const result = await approveKasbonRequestSingleLevel(request);
 
 			if (result.success) {
-				console.log('✅ Advance request approved');
+				console.log('✅ Kasbon request approved');
+				
+				// Show success notification
+				kasbonNotifications.approved(request);
+				
 				await loadAdvanceRequests(); // Reload data
 				await loadStatistics(); // Reload statistics
 			} else {
-				console.error('❌ Failed to approve advance request:', result.error);
-				// Fallback untuk update local state
-				const index = advanceRequests.findIndex((req) => req.id === request.id);
-				if (index !== -1) {
-					advanceRequests[index] = {
-						...advanceRequests[index],
-						status: 'approved',
-						approved_by: 'Finance Manager',
-						approved_date: new Date().toISOString().split('T')[0]
-					};
-					advanceRequests = [...advanceRequests];
-				}
+				console.error('❌ Failed to approve kasbon request:', result.error);
+				
+				// Show error notification
+				notifications.error(
+					'Gagal Menyetujui Kasbon',
+					result.error || 'Terjadi kesalahan saat menyetujui pengajuan kasbon'
+				);
 			}
 		} catch (error) {
 			console.error('Error approving request:', error);
+			
+			// Show error notification
+			notifications.error(
+				'Kesalahan Sistem',
+				'Terjadi kesalahan saat menyetujui pengajuan. Silakan coba lagi.'
+			);
+		} finally {
+			isApproving = false;
 		}
 	}
 
 	/**
-	 * Reject advance request
+	 * Reject kasbon request (Manager HRD only)
 	 * @param {any} request
 	 */
 	async function rejectRequest(request) {
-		try {
-			const result = await rejectAdvanceRequest(request);
-
-			if (result.success) {
-				console.log('✅ Advance request rejected');
-				await loadAdvanceRequests(); // Reload data
-				await loadStatistics(); // Reload statistics
-			} else {
-				console.error('❌ Failed to reject advance request:', result.error);
-				// Fallback untuk update local state
-				const index = advanceRequests.findIndex((req) => req.id === request.id);
-				if (index !== -1) {
-					advanceRequests[index] = {
-						...advanceRequests[index],
-						status: 'rejected',
-						approved_by: 'Finance Manager',
-						approved_date: new Date().toISOString().split('T')[0]
-					};
-					advanceRequests = [...advanceRequests];
-				}
-			}
-		} catch (error) {
-			console.error('Error rejecting request:', error);
-		}
+		// Open rejection modal instead of using prompt
+		rejectionRequest = request;
+		rejectionReason = '';
+		showRejectionModal = true;
 	}
 
 	/** @param {number} page */
@@ -235,6 +351,259 @@
 			currentPage++;
 		}
 	}
+
+	/**
+	 * Calculate payment progress for a request
+	 * @param {any} request
+	 */
+	/**
+	 * Open payment modal
+	 * @param {any} request
+	 */
+	function openPaymentModal(request) {
+		selectedRequest = request;
+		paymentAmount = request.monthly_payment || 0;
+		paymentDate = new Date().toISOString().split('T')[0];
+		paymentNotes = '';
+		showPaymentModal = true;
+	}
+
+	/**
+	 * Close payment modal
+	 */
+	function closePaymentModal() {
+		showPaymentModal = false;
+		selectedRequest = null;
+		paymentAmount = 0;
+		paymentNotes = '';
+	}
+
+	/**
+	 * Open detail modal with payment history
+	 * @param {any} request
+	 */
+	async function openDetailModal(request) {
+		selectedRequest = request;
+		showDetailModal = true;
+
+		// Load payment history
+		try {
+			const result = await getKasbonPaymentHistory(request.id);
+			if (result.success) {
+				paymentHistory = result.data || [];
+			} else {
+				// Fallback to mock data if API fails
+				paymentHistory = request.payments || [];
+			}
+		} catch (error) {
+			console.error('Error loading payment history:', error);
+			paymentHistory = request.payments || [];
+		}
+	}
+
+	/**
+	 * Close detail modal
+	 */
+	function closeDetailModal() {
+		showDetailModal = false;
+		selectedRequest = null;
+		paymentHistory = [];
+	}
+
+	/**
+	 * Submit rejection with reason from modal
+	 */
+	async function submitRejection() {
+		if (!rejectionReason.trim()) {
+			notifications.warning(
+				'Alasan Penolakan Diperlukan',
+				'Silakan masukkan alasan penolakan sebelum melanjutkan'
+			);
+			return;
+		}
+
+		if (isRejecting) return;
+
+		isRejecting = true;
+		try {
+			const result = await rejectKasbonRequestSingleLevel(rejectionRequest, rejectionReason);
+
+			if (result.success) {
+				console.log('✅ Kasbon request rejected');
+				
+				// Show rejection notification
+				kasbonNotifications.rejected(rejectionRequest, rejectionReason);
+				
+				await loadAdvanceRequests(); // Reload data
+				await loadStatistics(); // Reload statistics
+
+				// Close modal
+				showRejectionModal = false;
+				rejectionRequest = null;
+				rejectionReason = '';
+			} else {
+				console.error('❌ Failed to reject kasbon request:', result.error);
+				
+				// Show error notification
+				notifications.error(
+					'Gagal Menolak Kasbon',
+					result.error || 'Terjadi kesalahan saat menolak pengajuan kasbon'
+				);
+			}
+		} catch (error) {
+			console.error('Error rejecting request:', error);
+			
+			// Show error notification
+			notifications.error(
+				'Kesalahan Sistem',
+				'Terjadi kesalahan saat menolak pengajuan. Silakan coba lagi.'
+			);
+		} finally {
+			isRejecting = false;
+		}
+	}
+
+	/**
+	 * Cancel rejection modal
+	 */
+	function cancelRejection() {
+		showRejectionModal = false;
+		rejectionRequest = null;
+		rejectionReason = '';
+	}
+
+	/**
+	 * Test notification system with sample notifications
+	 */
+	function testNotifications() {
+		const sampleKasbon = {
+			employee_name: 'John Doe',
+			formatted_amount: 'Rp 3.000.000'
+		};
+
+		// Test all notification types with delay
+		setTimeout(() => {
+			kasbonNotifications.submitted(sampleKasbon);
+		}, 200);
+
+		setTimeout(() => {
+			kasbonNotifications.approved(sampleKasbon);
+		}, 1200);
+
+		setTimeout(() => {
+			kasbonNotifications.rejected(sampleKasbon, 'Nominal melebihi batas maksimal');
+		}, 2400);
+
+		setTimeout(() => {
+			kasbonNotifications.paymentRecorded({
+				amount: 500000,
+				formatted_amount: 'Rp 500.000'
+			});
+		}, 3600);
+
+		setTimeout(() => {
+			notifications.info(
+				'Test Notifikasi Selesai',
+				'Semua jenis notifikasi telah ditampilkan'
+			);
+		}, 4800);
+	}
+
+	/**
+	 * Record payment for advance request
+	 */
+	async function recordPayment() {
+		if (!selectedRequest || paymentAmount <= 0) return;
+
+		try {
+			const result = await recordKasbonPayment({
+				kasbon_id: selectedRequest.id,
+				amount: paymentAmount,
+				payment_date: paymentDate,
+				notes: paymentNotes,
+				payment_method: 'salary_deduction'
+			});
+
+			if (result.success) {
+				console.log('✅ Payment recorded successfully');
+
+				// Show success notification
+				kasbonNotifications.paymentRecorded({
+					amount: paymentAmount,
+					formatted_amount: `Rp ${paymentAmount.toLocaleString('id-ID')}`
+				});
+
+				// Update local data with real response
+				if (result.data && result.data.kasbon) {
+					// Pastikan advanceRequests dan selectedRequest valid
+					if (
+						advanceRequests &&
+						Array.isArray(advanceRequests) &&
+						selectedRequest &&
+						selectedRequest.id
+					) {
+						const index = advanceRequests.findIndex((req) => req && req.id === selectedRequest.id);
+						if (index !== -1) {
+							advanceRequests[index] = {
+								...advanceRequests[index],
+								total_paid: result.data.kasbon.total_paid,
+								payment_status: result.data.kasbon.payment_status,
+								last_payment_date: paymentDate
+							};
+							advanceRequests = [...advanceRequests];
+						}
+					}
+				}
+
+				await loadAdvanceRequests(); // Reload data
+				await loadStatistics(); // Reload statistics
+			} else {
+				console.error('❌ Failed to record payment:', result.error);
+
+				// Show error notification
+				notifications.error(
+					'Gagal Mencatat Pembayaran',
+					result.error || 'Terjadi kesalahan saat mencatat pembayaran kasbon'
+				);
+
+				// Fallback untuk update local state jika API gagal
+				if (selectedRequest && selectedRequest.id) {
+					if (!selectedRequest.payments) {
+						selectedRequest.payments = [];
+					}
+
+					selectedRequest.payments.push({
+						id: Date.now(),
+						amount: paymentAmount,
+						payment_date: paymentDate,
+						notes: paymentNotes,
+						payment_method: 'salary_deduction',
+						recorded_by: 'HRD',
+						recorded_at: new Date().toISOString()
+					});
+
+					// Update the requests array safely
+					if (advanceRequests && Array.isArray(advanceRequests)) {
+						const index = advanceRequests.findIndex((req) => req && req.id === selectedRequest.id);
+						if (index !== -1) {
+							advanceRequests[index] = { ...selectedRequest };
+							advanceRequests = [...advanceRequests];
+						}
+					}
+				}
+			}
+
+			closePaymentModal();
+		} catch (error) {
+			console.error('Error recording payment:', error);
+			
+			// Show error notification
+			notifications.error(
+				'Kesalahan Sistem',
+				'Terjadi kesalahan saat mencatat pembayaran. Silakan coba lagi.'
+			);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -244,8 +613,21 @@
 <div class="page-container">
 	<!-- Header -->
 	<div class="page-header">
-		<h1>Pengajuan Kasbon</h1>
-		<p>Kelola pengajuan kasbon karyawan</p>
+		<div class="header-content">
+			<div class="header-text">
+				<h1>Pengajuan Kasbon</h1>
+				<p>Kelola pengajuan kasbon karyawan</p>
+			</div>
+			<div class="header-actions">
+				<button 
+					class="btn btn-test-notification" 
+					on:click={() => testNotifications()}
+					title="Test sistem notifikasi"
+				>
+					🔔 Test Notifikasi
+				</button>
+			</div>
+		</div>
 	</div>
 
 	<!-- Connection Status -->
@@ -312,7 +694,7 @@
 		<div class="search-box">
 			<input
 				type="text"
-				placeholder="Cari berdasarkan nama, ID, alasan..."
+				placeholder="Cari berdasarkan nama, ID, divisi, alasan..."
 				bind:value={searchTerm}
 			/>
 		</div>
@@ -322,6 +704,14 @@
 				<option value="pending">Menunggu</option>
 				<option value="approved">Disetujui</option>
 				<option value="rejected">Ditolak</option>
+			</select>
+		</div>
+		<div class="filter-group">
+			<select bind:value={paymentStatusFilter}>
+				<option value="all">Semua Pembayaran</option>
+				<option value="on-track">Tepat Waktu</option>
+				<option value="overdue">Terlambat</option>
+				<option value="completed">Lunas</option>
 			</select>
 		</div>
 	</div>
@@ -350,16 +740,21 @@
 							<th>Tanggal Pengajuan</th>
 							<th>Tenor</th>
 							<th>Status</th>
+							<th>Progress Cicilan</th>
 							<th>Aksi</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each paginatedRequests as request}
+							{@const paymentProgress = getPaymentProgress(request)}
 							<tr>
 								<td>
 									<div class="employee-info">
 										<div class="employee-name">{request.employee_name || request.nama}</div>
-										<div class="employee-id">{request.user_id}</div>
+										<!-- <div class="employee-id">{request.user_id}</div> -->
+										<div class="employee-division">
+											📍 {request.employee_division || request.divisi}
+										</div>
 										<div class="employee-email">{request.employee_email || request.email}</div>
 									</div>
 								</td>
@@ -392,8 +787,8 @@
 									</div>
 								</td>
 								<td>
-									<span class="status-badge {getStatusClass(request.status)}">
-										{getStatusText(request.status)}
+									<span class="status-badge {getStatusClass(request)}">
+										{getStatusText(request)}
 									</span>
 									{#if request.approved_by}
 										<div class="approved-info">
@@ -403,16 +798,146 @@
 									{/if}
 								</td>
 								<td>
+									{#if request.status === 'approved'}
+										<div class="payment-progress">
+											<div class="progress-info">
+												<div class="progress-header">
+													<div class="progress-text">
+														<span class="progress-percentage"
+															>{paymentProgress.percentage.toFixed(1)}%</span
+														>
+														<span
+															class="progress-status {paymentProgress.paymentStatus === 'completed'
+																? 'completed'
+																: paymentProgress.isOverdue
+																	? 'overdue'
+																	: 'on-track'}"
+														>
+															{paymentProgress.paymentStatus === 'completed'
+																? 'Lunas'
+																: paymentProgress.isOverdue
+																	? 'Terlambat'
+																	: paymentProgress.percentage > 0
+																		? 'Berjalan'
+																		: 'Belum Bayar'}
+														</span>
+													</div>
+													<div
+														class="progress-bar"
+														title="Progress Pembayaran: {formatCurrency(
+															paymentProgress.totalPaid
+														)} dari {formatCurrency(
+															request.amount || request.nominal
+														)} ({paymentProgress.percentage.toFixed(
+															1
+														)}%). {paymentProgress.isOverdue
+															? 'Status: Terlambat bayar'
+															: paymentProgress.percentage >= 100
+																? 'Status: Lunas'
+																: 'Status: Dalam pembayaran'}"
+													>
+														<div
+															class="progress-fill {paymentProgress.paymentStatus === 'completed'
+																? 'completed'
+																: paymentProgress.isOverdue
+																	? 'overdue'
+																	: 'on-track'}"
+															style="width: {Math.min(paymentProgress.percentage, 100)}%"
+														></div>
+													</div>
+												</div>
+												<div class="progress-details">
+													<div class="progress-amounts">
+														<div class="amount-item">
+															<span class="amount-label">Dibayar</span>
+															<span class="amount-value"
+																>{formatCurrency(paymentProgress.paidAmount)}</span
+															>
+														</div>
+														<div class="amount-item">
+															<span class="amount-label">Sisa</span>
+															<span class="amount-value"
+																>{formatCurrency(paymentProgress.remainingAmount)}</span
+															>
+														</div>
+													</div>
+													{#if paymentProgress.percentage > 0 && paymentProgress.percentage < 100}
+														<div class="progress-schedule">
+															<small class="schedule-info">
+																<div class="schedule-row">
+																	<span
+																		>Cicilan: {formatCurrency(
+																			paymentProgress.monthlyPayment
+																		)}/bulan</span
+																	>
+																	{#if paymentProgress.isOverdue}
+																		<span class="overdue-indicator">
+																			⚠️ Terlambat {paymentProgress.monthsPassed} bulan
+																		</span>
+																	{:else}
+																		<span class="ontime-indicator"> ✅ Tepat waktu </span>
+																	{/if}
+																</div>
+																{#if paymentProgress.nextPaymentDate}
+																	<div class="next-payment">
+																		Jatuh tempo: {formatDate(paymentProgress.nextPaymentDate)}
+																	</div>
+																{/if}
+															</small>
+														</div>
+													{:else if paymentProgress.percentage >= 100}
+														<div class="completion-badge">
+															<span class="completed-indicator">🎉 Pembayaran Selesai</span>
+														</div>
+													{/if}
+												</div>
+											</div>
+										</div>
+									{:else}
+										<div class="payment-progress">
+											<span class="no-payment">Belum Disetujui</span>
+										</div>
+									{/if}
+								</td>
+								<td>
 									<div class="action-buttons">
-										{#if request.status === 'pending'}
-											<button class="btn btn-approve" on:click={() => approveRequest(request)}>
-												✓ Setujui
-											</button>
-											<button class="btn btn-reject" on:click={() => rejectRequest(request)}>
-												✗ Tolak
+										{#if request.status === 'pending' || request.approval_stage === 'pending'}
+											{@const availableActions = getAvailableActions(request)}
+											{#if availableActions.includes('approve')}
+												<button
+													class="btn btn-approve"
+													on:click={() => approveRequest(request)}
+													disabled={isApproving}
+												>
+													{#if isApproving}
+														⏳ Menyetujui...
+													{:else}
+														✓ Setujui
+													{/if}
+												</button>
+											{/if}
+											{#if availableActions.includes('reject')}
+												<button
+													class="btn btn-reject"
+													on:click={() => rejectRequest(request)}
+													disabled={isRejecting}
+												>
+													✗ Tolak
+												</button>
+											{/if}
+										{:else if request.status === 'approved' || request.approval_stage === 'approved'}
+											{#if paymentProgress.percentage < 100}
+												<button class="btn btn-payment" on:click={() => openPaymentModal(request)}>
+													💰 Catat Bayar
+												</button>
+											{/if}
+											<button class="btn btn-detail" on:click={() => openDetailModal(request)}>
+												👁️ Detail
 											</button>
 										{:else}
-											<button class="btn btn-detail"> 👁️ Detail </button>
+											<button class="btn btn-detail" on:click={() => openDetailModal(request)}>
+												👁️ Detail
+											</button>
 										{/if}
 									</div>
 								</td>
@@ -447,6 +972,498 @@
 	</div>
 </div>
 
+<!-- Payment Modal -->
+{#if showPaymentModal && selectedRequest}
+	{@const progress = getPaymentProgress(selectedRequest)}
+	<div
+		class="modal-overlay"
+		role="dialog"
+		aria-modal="true"
+		tabindex="0"
+		on:click={(e) => {
+			if (e.target === e.currentTarget) closePaymentModal();
+		}}
+		on:keydown={(e) => e.key === 'Escape' && closePaymentModal()}
+	>
+		<div class="modal-content" role="document">
+			<div class="modal-header">
+				<h3>Catat Pembayaran Cicilan</h3>
+				<button class="modal-close" on:click={closePaymentModal}>✕</button>
+			</div>
+
+			<div class="modal-body">
+				<div class="employee-summary">
+					<h4>{selectedRequest.employee_name || selectedRequest.nama}</h4>
+					<p class="employee-division-info">
+						<span class="division-tag"
+							>📍 {selectedRequest.employee_division || selectedRequest.divisi}</span
+						>
+						<span class="employee-id-info">ID: {selectedRequest.user_id}</span>
+					</p>
+					<p>Total Kasbon: {formatCurrency(selectedRequest.amount || selectedRequest.nominal)}</p>
+					<p>Cicilan Bulanan: {formatCurrency(selectedRequest.monthly_payment || 0)}</p>
+				</div>
+
+				<div class="payment-summary">
+					<div class="current-progress">
+						<div class="progress-header-modal">
+							<span class="progress-label">Progress Pembayaran</span>
+							<span class="progress-percentage-modal">{progress.percentage.toFixed(1)}%</span>
+						</div>
+						<div
+							class="progress-bar-modal"
+							title="Progress Detail: {formatCurrency(progress.paidAmount)} dari {formatCurrency(
+								selectedRequest.amount || selectedRequest.nominal
+							)} ({progress.percentage.toFixed(1)}%). {progress.isOverdue
+								? 'Status: Terlambat pembayaran'
+								: progress.percentage >= 100
+									? 'Status: Pembayaran selesai'
+									: 'Status: Pembayaran berjalan lancar'}"
+						>
+							<div
+								class="progress-fill-modal {progress.paymentStatus === 'completed'
+									? 'completed'
+									: progress.isOverdue
+										? 'overdue'
+										: 'on-track'}"
+								style="width: {Math.min(progress.percentage, 100)}%"
+							></div>
+						</div>
+					</div>
+					<div class="summary-grid">
+						<div class="summary-item">
+							<span class="summary-label">Sudah Dibayar:</span>
+							<span class="summary-value">{formatCurrency(progress.paidAmount)}</span>
+						</div>
+						<div class="summary-item">
+							<span class="summary-label">Sisa Tagihan:</span>
+							<span class="summary-value">{formatCurrency(progress.remainingAmount)}</span>
+						</div>
+						<div class="summary-item">
+							<span class="summary-label">Status:</span>
+							<span
+								class="summary-status {progress.paymentStatus === 'completed'
+									? 'completed'
+									: progress.isOverdue
+										? 'overdue'
+										: 'on-track'}"
+							>
+								{progress.paymentStatus === 'completed'
+									? 'Lunas'
+									: progress.isOverdue
+										? 'Terlambat'
+										: progress.percentage > 0
+											? 'Berjalan'
+											: 'Belum Bayar'}
+							</span>
+						</div>
+						<div class="summary-item">
+							<span class="summary-label">Cicilan Bulanan:</span>
+							<span class="summary-value">{formatCurrency(progress.monthlyPayment)}</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<label for="paymentAmount">Jumlah Pembayaran</label>
+					<input
+						id="paymentAmount"
+						type="number"
+						bind:value={paymentAmount}
+						min="0"
+						max={progress.remainingAmount}
+						step="1000"
+						placeholder="Masukkan jumlah pembayaran"
+					/>
+					<small>Maksimal: {formatCurrency(progress.remainingAmount)}</small>
+				</div>
+
+				<div class="form-group">
+					<label for="paymentDate">Tanggal Pembayaran</label>
+					<input id="paymentDate" type="date" bind:value={paymentDate} />
+				</div>
+
+				<div class="form-group">
+					<label for="paymentNotes">Catatan (Opsional)</label>
+					<textarea
+						id="paymentNotes"
+						bind:value={paymentNotes}
+						placeholder="Tambahkan catatan pembayaran..."
+						rows="3"
+					></textarea>
+				</div>
+			</div>
+
+			<div class="modal-footer">
+				<button class="btn btn-secondary" on:click={closePaymentModal}> Batal </button>
+				<button
+					class="btn btn-primary"
+					on:click={recordPayment}
+					disabled={paymentAmount <= 0 || paymentAmount > progress.remainingAmount}
+				>
+					Catat Pembayaran
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Rejection Modal -->
+{#if showRejectionModal && rejectionRequest}
+	<div
+		class="modal-overlay"
+		role="dialog"
+		aria-modal="true"
+		tabindex="0"
+		on:click={(e) => {
+			if (e.target === e.currentTarget) cancelRejection();
+		}}
+		on:keydown={(e) => e.key === 'Escape' && cancelRejection()}
+	>
+		<div class="modal-content" role="document">
+			<div class="modal-header">
+				<h3>Tolak Pengajuan Kasbon</h3>
+				<button class="modal-close" on:click={cancelRejection}>✕</button>
+			</div>
+
+			<div class="modal-body">
+				<div class="employee-summary">
+					<h4>{rejectionRequest.employee_name || rejectionRequest.nama}</h4>
+					<p class="employee-division-info">
+						<span class="division-tag"
+							>📍 {rejectionRequest.employee_division || rejectionRequest.divisi}</span
+						>
+					</p>
+				</div>
+
+				<div class="advance-summary">
+					<div class="advance-detail">
+						<span class="label">Nominal Pengajuan:</span>
+						<span class="amount"
+							>Rp {Number(rejectionRequest.nominal || 0).toLocaleString('id-ID')}</span
+						>
+					</div>
+					<div class="advance-detail">
+						<span class="label">Tanggal Pengajuan:</span>
+						<span class="date"
+							>{rejectionRequest.tanggal || rejectionRequest.tanggal_pengajuan}</span
+						>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<label for="rejectionReason">Alasan Penolakan *</label>
+					<textarea
+						id="rejectionReason"
+						bind:value={rejectionReason}
+						placeholder="Masukkan alasan penolakan pengajuan kasbon..."
+						rows="4"
+						required
+					></textarea>
+				</div>
+			</div>
+
+			<div class="modal-footer">
+				<button class="btn btn-secondary" on:click={cancelRejection}>Batal</button>
+				<button
+					class="btn btn-danger"
+					on:click={submitRejection}
+					disabled={!rejectionReason.trim() || isRejecting}
+				>
+					{#if isRejecting}
+						⏳ Menolak...
+					{:else}
+						✗ Tolak Pengajuan
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Detail Modal -->
+{#if showDetailModal && selectedRequest}
+	{@const progress = getPaymentProgress(selectedRequest)}
+	<div
+		class="modal-overlay"
+		role="dialog"
+		aria-modal="true"
+		tabindex="0"
+		on:click={(e) => {
+			if (e.target === e.currentTarget) closeDetailModal();
+		}}
+		on:keydown={(e) => e.key === 'Escape' && closeDetailModal()}
+	>
+		<div class="modal-content modal-content-wide" role="document">
+			<div class="modal-header">
+				<h3>Detail Kasbon & Riwayat Pembayaran</h3>
+				<button class="modal-close" on:click={closeDetailModal}>✕</button>
+			</div>
+
+			<div class="modal-body">
+				<!-- Employee Information -->
+				<div class="detail-section">
+					<h4>Informasi Karyawan</h4>
+					<div class="info-grid">
+						<div class="info-item">
+							<span class="info-label">Nama Karyawan</span>
+							<span class="info-value">{selectedRequest.employee_name || selectedRequest.nama}</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">User ID</span>
+							<span class="info-value">{selectedRequest.user_id}</span>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Divisi</span>
+							<span class="info-value division-badge"
+								>📍 {selectedRequest.employee_division || selectedRequest.divisi}</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Email</span>
+							<span class="info-value"
+								>{selectedRequest.employee_email || selectedRequest.email}</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Status</span>
+							<span class="status-badge {getStatusClass(selectedRequest)}">
+								{getStatusText(selectedRequest)}
+							</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Kasbon Information -->
+				<div class="detail-section">
+					<h4>Detail Kasbon</h4>
+					<div class="info-grid">
+						<div class="info-item">
+							<span class="info-label">Total Kasbon</span>
+							<span class="info-value amount-highlight"
+								>{formatCurrency(selectedRequest.amount || selectedRequest.nominal)}</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Tenor</span>
+							<span class="info-value"
+								>{selectedRequest.tenor_months || selectedRequest.tenor} bulan</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Cicilan per Bulan</span>
+							<span class="info-value">{formatCurrency(selectedRequest.monthly_payment || 0)}</span>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Keterangan</span>
+							<span class="info-value"
+								>{selectedRequest.description || selectedRequest.keterangan}</span
+							>
+						</div>
+						<div class="info-item">
+							<span class="info-label">Tanggal Pengajuan</span>
+							<span class="info-value"
+								>{formatDate(
+									selectedRequest.submitted_date || selectedRequest.tanggal_pengajuan
+								)}</span
+							>
+						</div>
+						{#if selectedRequest.approved_date}
+							<div class="info-item">
+								<span class="info-label">Tanggal Disetujui</span>
+								<span class="info-value">{formatDate(selectedRequest.approved_date)}</span>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- Rejection Information -->
+				{#if selectedRequest.status === 'rejected' || selectedRequest.approval_stage === 'rejected'}
+					<div class="detail-section rejection-section">
+						<h4>Informasi Penolakan</h4>
+						<div class="rejection-info">
+							<div class="rejection-icon">❌</div>
+							<div class="rejection-details">
+								{#if selectedRequest.final_rejection_reason}
+									<div class="rejection-item">
+										<span class="rejection-label">Alasan Penolakan:</span>
+										<div class="rejection-reason">{selectedRequest.final_rejection_reason}</div>
+									</div>
+								{/if}
+								{#if selectedRequest.manager_hrd_rejection_reason}
+									<div class="rejection-item">
+										<span class="rejection-label">Catatan Manager HRD:</span>
+										<div class="rejection-reason">
+											{selectedRequest.manager_hrd_rejection_reason}
+										</div>
+									</div>
+								{/if}
+								{#if selectedRequest.final_rejected_date}
+									<div class="rejection-item">
+										<span class="rejection-label">Tanggal Penolakan:</span>
+										<div class="rejection-date">
+											{formatDate(selectedRequest.final_rejected_date)}
+										</div>
+									</div>
+								{/if}
+								{#if selectedRequest.final_rejected_by}
+									<div class="rejection-item">
+										<span class="rejection-label">Ditolak oleh:</span>
+										<div class="rejection-by">{selectedRequest.final_rejected_by}</div>
+									</div>
+								{/if}
+								{#if !selectedRequest.final_rejection_reason && !selectedRequest.manager_hrd_rejection_reason}
+									<div class="rejection-item">
+										<span class="rejection-label">Status:</span>
+										<div class="rejection-reason">
+											Pengajuan kasbon ditolak oleh sistem approval
+										</div>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Payment Progress -->
+				{#if selectedRequest.status === 'approved'}
+					<div class="detail-section">
+						<h4>Progress Pembayaran</h4>
+						<div class="progress-summary">
+							<div class="progress-visual">
+								<div class="progress-header-detail">
+									<span class="progress-percentage-large">{progress.percentage.toFixed(1)}%</span>
+									<span
+										class="progress-status-detail {progress.paymentStatus === 'completed'
+											? 'completed'
+											: progress.isOverdue
+												? 'overdue'
+												: 'on-track'}"
+									>
+										{progress.paymentStatus === 'completed'
+											? 'Lunas'
+											: progress.isOverdue
+												? 'Terlambat'
+												: progress.percentage > 0
+													? 'Berjalan'
+													: 'Belum Bayar'}
+									</span>
+								</div>
+								<div class="progress-bar-detail">
+									<div
+										class="progress-fill-detail {progress.paymentStatus === 'completed'
+											? 'completed'
+											: progress.isOverdue
+												? 'overdue'
+												: 'on-track'}"
+										style="width: {Math.min(progress.percentage, 100)}%"
+									></div>
+								</div>
+							</div>
+							<div class="progress-stats">
+								<div class="stat-item">
+									<span class="stat-label">Sudah Dibayar</span>
+									<span class="stat-value paid">{formatCurrency(progress.paidAmount)}</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-label">Sisa Tagihan</span>
+									<span class="stat-value remaining"
+										>{formatCurrency(progress.remainingAmount)}</span
+									>
+								</div>
+								<div class="stat-item">
+									<span class="stat-label">Bulan Berlalu</span>
+									<span class="stat-value">{progress.monthsPassed} bulan</span>
+								</div>
+								{#if progress.nextPaymentDate && progress.percentage < 100}
+									<div class="stat-item">
+										<span class="stat-label">Jatuh Tempo Berikutnya</span>
+										<span class="stat-value">{formatDate(progress.nextPaymentDate)}</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
+
+					<!-- Payment History -->
+					<div class="detail-section">
+						<h4>Riwayat Pembayaran</h4>
+						{#if paymentHistory.length > 0}
+							<div class="payment-history">
+								{#each paymentHistory as payment, index}
+									<div class="payment-item {index === 0 ? 'latest' : ''}">
+										<div class="payment-header">
+											<div class="payment-number">
+												<span class="payment-badge">#{index + 1}</span>
+												{#if index === 0}
+													<span class="latest-badge">Terbaru</span>
+												{/if}
+											</div>
+											<div class="payment-amount">
+												{formatCurrency(payment.amount)}
+											</div>
+										</div>
+										<div class="payment-details">
+											<div class="payment-meta">
+												<div class="meta-item">
+													<span class="meta-label">📅 Tanggal</span>
+													<span class="meta-value">{formatDate(payment.payment_date)}</span>
+												</div>
+												<div class="meta-item">
+													<span class="meta-label">💳 Metode</span>
+													<span class="meta-value">
+														{payment.payment_method === 'salary_deduction'
+															? 'Potong Gaji'
+															: payment.payment_method || 'Manual'}
+													</span>
+												</div>
+												{#if payment.recorded_by}
+													<div class="meta-item">
+														<span class="meta-label">👤 Dicatat oleh</span>
+														<span class="meta-value">{payment.recorded_by}</span>
+													</div>
+												{/if}
+											</div>
+											{#if payment.notes}
+												<div class="payment-notes">
+													<span class="notes-label">📝 Catatan:</span>
+													<span class="notes-text">{payment.notes}</span>
+												</div>
+											{/if}
+										</div>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<div class="no-history">
+								<div class="no-history-icon">💳</div>
+								<h5>Belum Ada Pembayaran</h5>
+								<p>Riwayat pembayaran akan muncul setelah cicilan pertama dicatat</p>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<div class="modal-footer">
+				{#if selectedRequest.status === 'approved' && progress.percentage < 100}
+					<button
+						class="btn btn-payment"
+						on:click={() => {
+							closeDetailModal();
+							openPaymentModal(selectedRequest);
+						}}
+					>
+						💰 Catat Pembayaran
+					</button>
+				{/if}
+				<button class="btn btn-secondary" on:click={closeDetailModal}> Tutup </button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
 	.page-container {
 		padding: 24px;
@@ -456,6 +1473,23 @@
 
 	.page-header {
 		margin-bottom: 32px;
+	}
+
+	.header-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 20px;
+	}
+
+	.header-text {
+		flex: 1;
+	}
+
+	.header-actions {
+		display: flex;
+		gap: 12px;
+		align-items: center;
 	}
 
 	.page-header h1 {
@@ -469,6 +1503,29 @@
 		color: #64748b;
 		margin: 0;
 		font-size: 16px;
+	}
+
+	.btn-test-notification {
+		background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+		color: white;
+		border: none;
+		padding: 10px 16px;
+		border-radius: 8px;
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+	}
+
+	.btn-test-notification:hover {
+		background: linear-gradient(135deg, #1d4ed8, #1e40af);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+	}
+
+	.btn-test-notification:active {
+		transform: translateY(0);
 	}
 
 	/* Connection Status */
@@ -700,6 +1757,18 @@
 		font-size: 13px;
 	}
 
+	.employee-division {
+		font-size: 12px;
+		color: #059669;
+		font-weight: 500;
+		margin-top: 2px;
+		padding: 2px 8px;
+		background: #ecfdf5;
+		border-radius: 8px;
+		display: inline-block;
+		border: 1px solid #d1fae5;
+	}
+
 	.employee-email {
 		font-size: 12px;
 		color: #64748b;
@@ -880,6 +1949,1088 @@
 		border-color: #3b82f6;
 	}
 
+	.btn-payment {
+		background: #8b5cf6;
+		color: white;
+	}
+
+	.btn-payment:hover {
+		background: #7c3aed;
+		transform: translateY(-1px);
+	}
+
+	/* Payment Progress Styles */
+	.payment-progress {
+		min-width: 220px;
+		max-width: 280px;
+	}
+
+	.progress-info {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.progress-header {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.progress-text {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.progress-percentage {
+		font-weight: 700;
+		color: #1e293b;
+		font-size: 16px;
+	}
+
+	.progress-status {
+		font-size: 10px;
+		font-weight: 600;
+		padding: 3px 8px;
+		border-radius: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		white-space: nowrap;
+	}
+
+	.progress-status.on-track {
+		background: #dbeafe;
+		color: #2563eb;
+	}
+
+	.progress-status.overdue {
+		background: #fee2e2;
+		color: #dc2626;
+	}
+
+	.progress-status.completed {
+		background: #d1fae5;
+		color: #059669;
+	}
+
+	.progress-bar {
+		width: 100%;
+		height: 10px;
+		background: #e5e7eb;
+		border-radius: 6px;
+		overflow: hidden;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+		cursor: help;
+		transition: all 0.2s ease;
+	}
+
+	.progress-bar:hover {
+		box-shadow:
+			inset 0 1px 2px rgba(0, 0, 0, 0.1),
+			0 2px 8px rgba(0, 0, 0, 0.1);
+		transform: translateY(-1px);
+	}
+
+	.progress-fill {
+		height: 100%;
+		border-radius: 6px;
+		transition: width 0.8s ease-in-out;
+		position: relative;
+		overflow: hidden;
+	}
+
+	/* .progress-fill::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: linear-gradient(
+			90deg,
+			transparent 0%,
+			rgba(255, 255, 255, 0.4) 50%,
+			transparent 100%
+		);
+		animation: shimmer 2.5s infinite;
+	} */
+
+	/* @keyframes shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	} */
+
+	.progress-fill.on-track {
+		background: linear-gradient(90deg, #3b82f6, #2563eb);
+		box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+	}
+
+	.progress-fill.overdue {
+		background: linear-gradient(90deg, #ef4444, #dc2626);
+		box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+		animation: pulse-overdue 1.8s infinite;
+	}
+
+	/* @keyframes pulse-overdue {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.7;
+		}
+	} */
+
+	.progress-fill.completed {
+		background: linear-gradient(90deg, #10b981, #059669);
+		box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+	}
+
+	.progress-details {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.progress-amounts {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.amount-item {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.amount-label {
+		font-size: 10px;
+		color: #64748b;
+		text-transform: uppercase;
+		font-weight: 600;
+		letter-spacing: 0.5px;
+	}
+
+	.amount-value {
+		font-size: 12px;
+		color: #1e293b;
+		font-weight: 600;
+	}
+
+	.progress-schedule {
+		margin-top: 4px;
+		padding-top: 6px;
+		border-top: 1px solid #e2e8f0;
+	}
+
+	.schedule-info {
+		color: #64748b;
+		font-size: 10px;
+		line-height: 1.4;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.schedule-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.next-payment {
+		margin-top: 2px;
+		font-weight: 500;
+		color: #374151;
+		font-size: 11px;
+	}
+
+	.overdue-indicator {
+		background: linear-gradient(135deg, #fef3c7, #fbbf24);
+		color: #92400e;
+		padding: 2px 8px;
+		border-radius: 12px;
+		font-weight: 500;
+		font-size: 9px;
+		border: 1px solid #f59e0b;
+		white-space: nowrap;
+	}
+
+	.ontime-indicator {
+		background: linear-gradient(135deg, #a7f3d0);
+		color: #065f46;
+		padding: 2px 8px;
+		border-radius: 12px;
+		font-weight: 500;
+		font-size: 9px;
+		border: 1px solid #059669;
+		white-space: nowrap;
+	}
+
+	.completion-badge {
+		margin-top: 8px;
+		text-align: center;
+	}
+
+	.completed-indicator {
+        background: #a7f3d0;
+        color: #064e3b;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 10px;
+        border: 2px solid #059669;
+        display: inline-block;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+	}
+
+	.no-payment {
+		color: #64748b;
+		font-style: italic;
+		font-size: 13px;
+		text-align: center;
+		padding: 16px;
+		background: #f8fafc;
+		border-radius: 8px;
+		border: 1px dashed #d1d5db;
+	}
+
+	/* Mobile Responsiveness for Progress Display */
+	@media (max-width: 768px) {
+		.header-content {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 16px;
+		}
+
+		.header-actions {
+			align-self: stretch;
+		}
+
+		.btn-test-notification {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.progress-amounts {
+			grid-template-columns: 1fr;
+			gap: 6px;
+		}
+
+		.schedule-row {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 4px;
+		}
+
+		.overdue-indicator,
+		.ontime-indicator {
+			font-size: 8px;
+			padding: 1px 6px;
+		}
+
+		.completed-indicator {
+			font-size: 9px;
+			padding: 4px 12px;
+		}
+
+		.progress-bar {
+			height: 8px;
+		}
+
+		.progress-bar-modal {
+			height: 10px;
+		}
+
+		.progress-percentage-modal {
+			font-size: 16px;
+		}
+
+		.progress-label {
+			font-size: 12px;
+		}
+
+		.summary-grid {
+			grid-template-columns: 1fr;
+			gap: 8px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.schedule-info {
+			font-size: 9px;
+		}
+
+		.next-payment {
+			font-size: 10px;
+		}
+
+		.overdue-indicator,
+		.ontime-indicator {
+			font-size: 7px;
+			padding: 1px 4px;
+		}
+
+		.progress-bar {
+			height: 6px;
+		}
+
+		.progress-details {
+			gap: 4px;
+		}
+	}
+
+	/* Modal Styles */
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		padding: 20px;
+	}
+
+	.modal-content {
+		background: white;
+		border-radius: 16px;
+		width: 100%;
+		max-width: 500px;
+		max-height: 90vh;
+		overflow-y: auto;
+		box-shadow:
+			0 20px 25px -5px rgba(0, 0, 0, 0.1),
+			0 10px 10px -5px rgba(0, 0, 0, 0.04);
+	}
+
+	.modal-content-wide {
+		max-width: 800px;
+	}
+
+	.modal-header {
+		padding: 24px 24px 0;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 1px solid #e5e7eb;
+		margin-bottom: 24px;
+	}
+
+	.modal-header h3 {
+		margin: 0;
+		font-size: 20px;
+		font-weight: 600;
+		color: #1e293b;
+	}
+
+	.modal-close {
+		background: none;
+		border: none;
+		font-size: 20px;
+		color: #64748b;
+		cursor: pointer;
+		padding: 4px;
+		border-radius: 4px;
+		transition: background-color 0.2s ease;
+	}
+
+	.modal-close:hover {
+		background: #f1f5f9;
+		color: #1e293b;
+	}
+
+	.modal-body {
+		padding: 0 24px 24px;
+	}
+
+	.employee-summary {
+		background: #f8fafc;
+		border-radius: 12px;
+		padding: 16px;
+		margin-bottom: 24px;
+	}
+
+	.employee-summary h4 {
+		margin: 0 0 8px 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: #1e293b;
+	}
+
+	.employee-summary p {
+		margin: 4px 0;
+		font-size: 14px;
+		color: #64748b;
+	}
+
+	.employee-division-info {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin: 8px 0 !important;
+	}
+
+	.division-tag {
+		background: #ecfdf5;
+		color: #059669;
+		padding: 2px 8px;
+		border-radius: 8px;
+		font-size: 11px;
+		font-weight: 600;
+		border: 1px solid #d1fae5;
+	}
+
+	.employee-id-info {
+		color: #64748b;
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	.payment-summary {
+		border: 1px solid #e5e7eb;
+		border-radius: 12px;
+		padding: 20px;
+		margin-bottom: 24px;
+		background: #f8fafc;
+	}
+
+	.current-progress {
+		margin-bottom: 16px;
+		padding-bottom: 16px;
+		border-bottom: 1px solid #e2e8f0;
+	}
+
+	.progress-header-modal {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+
+	.progress-label {
+		font-size: 14px;
+		font-weight: 600;
+		color: #374151;
+	}
+
+	.progress-percentage-modal {
+		font-size: 18px;
+		font-weight: 700;
+		color: #1f2937;
+	}
+
+	.progress-bar-modal {
+		width: 100%;
+		height: 12px;
+		background: #e5e7eb;
+		border-radius: 6px;
+		overflow: hidden;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+		cursor: help;
+		transition: all 0.2s ease;
+	}
+
+	.progress-bar-modal:hover {
+		box-shadow:
+			inset 0 1px 2px rgba(0, 0, 0, 0.1),
+			0 4px 12px rgba(0, 0, 0, 0.15);
+		transform: translateY(-1px);
+	}
+
+	.progress-fill-modal {
+		height: 100%;
+		border-radius: 6px;
+		transition: width 0.8s ease-in-out;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.progress-fill-modal::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: linear-gradient(
+			90deg,
+			transparent 0%,
+			rgba(255, 255, 255, 0.4) 50%,
+			transparent 100%
+		);
+		animation: shimmer 2.5s infinite;
+	}
+
+	.progress-fill-modal.on-track {
+		background: linear-gradient(90deg, #3b82f6, #2563eb);
+		box-shadow: 0 1px 3px rgba(59, 130, 246, 0.4);
+	}
+
+	.progress-fill-modal.overdue {
+		background: linear-gradient(90deg, #ef4444, #dc2626);
+		box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);
+		animation: pulse-overdue 1.8s infinite;
+	}
+
+	.progress-fill-modal.completed {
+		background: linear-gradient(90deg, #10b981, #059669);
+		box-shadow: 0 1px 3px rgba(16, 185, 129, 0.4);
+	}
+
+	.summary-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+
+	.summary-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 12px;
+		background: white;
+		border-radius: 8px;
+		border: 1px solid #e5e7eb;
+	}
+
+	.summary-item:last-child {
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.summary-label {
+		font-size: 12px;
+		color: #64748b;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.summary-value {
+		font-size: 14px;
+		color: #1e293b;
+		font-weight: 600;
+	}
+
+	.summary-status {
+		font-size: 12px;
+		font-weight: 600;
+		padding: 4px 8px;
+		border-radius: 6px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		width: fit-content;
+	}
+
+	.summary-status.on-track {
+		background: #dbeafe;
+		color: #2563eb;
+	}
+
+	.summary-status.overdue {
+		background: #fee2e2;
+		color: #dc2626;
+	}
+
+	.summary-status.completed {
+		background: #d1fae5;
+		color: #059669;
+	}
+
+	.form-group {
+		margin-bottom: 20px;
+	}
+
+	.form-group label {
+		display: block;
+		margin-bottom: 8px;
+		font-size: 14px;
+		font-weight: 500;
+		color: #374151;
+	}
+
+	.form-group input,
+	.form-group textarea {
+		width: 100%;
+		padding: 12px 16px;
+		border: 1px solid #d1d5db;
+		border-radius: 8px;
+		font-size: 14px;
+		transition: border-color 0.2s ease;
+		box-sizing: border-box;
+	}
+
+	.form-group input:focus,
+	.form-group textarea:focus {
+		outline: none;
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	.form-group small {
+		display: block;
+		margin-top: 4px;
+		font-size: 12px;
+		color: #64748b;
+	}
+
+	.form-group textarea {
+		resize: vertical;
+		min-height: 80px;
+	}
+
+	.modal-footer {
+		padding: 0 24px 24px;
+		display: flex;
+		gap: 12px;
+		justify-content: flex-end;
+	}
+
+	.btn-secondary {
+		background: white;
+		color: #374151;
+		border: 1px solid #d1d5db;
+	}
+
+	.btn-secondary:hover {
+		background: #f9fafb;
+		border-color: #9ca3af;
+	}
+
+	.btn-primary {
+		background: #3b82f6;
+		color: white;
+		border: 1px solid #3b82f6;
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background: #2563eb;
+		border-color: #2563eb;
+	}
+
+	.btn-primary:disabled {
+		background: #9ca3af;
+		border-color: #9ca3af;
+		cursor: not-allowed;
+		opacity: 0.6;
+	}
+
+	/* Detail Modal Styles */
+	.detail-section {
+		margin-bottom: 32px;
+		padding-bottom: 24px;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.detail-section:last-child {
+		border-bottom: none;
+		margin-bottom: 0;
+	}
+
+	.detail-section h4 {
+		margin: 0 0 16px 0;
+		font-size: 18px;
+		font-weight: 600;
+		color: #1e293b;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.info-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 16px;
+	}
+
+	.info-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.info-label {
+		font-size: 12px;
+		color: #64748b;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.info-value {
+		font-size: 14px;
+		color: #1e293b;
+		font-weight: 500;
+	}
+
+	.amount-highlight {
+		font-size: 16px;
+		font-weight: 700;
+		color: #059669;
+	}
+
+	.division-badge {
+		background: #ecfdf5;
+		color: #059669;
+		padding: 4px 12px;
+		border-radius: 12px;
+		font-size: 12px;
+		font-weight: 600;
+		border: 1px solid #d1fae5;
+		display: inline-block;
+	}
+
+	/* Rejection Section Styles */
+	.rejection-section {
+		background: #fef2f2;
+		border: 1px solid #fecaca;
+		border-radius: 12px;
+		padding: 20px;
+		margin-bottom: 32px;
+	}
+
+	.rejection-section h4 {
+		color: #dc2626;
+		margin-bottom: 16px;
+	}
+
+	.rejection-info {
+		display: flex;
+		gap: 16px;
+		align-items: flex-start;
+	}
+
+	.rejection-icon {
+		font-size: 24px;
+		flex-shrink: 0;
+	}
+
+	.rejection-details {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.rejection-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.rejection-label {
+		font-size: 12px;
+		color: #991b1b;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.rejection-reason {
+		background: white;
+		padding: 12px;
+		border-radius: 8px;
+		border: 1px solid #fecaca;
+		color: #1f2937;
+		font-size: 14px;
+		line-height: 1.5;
+		white-space: pre-wrap;
+	}
+
+	.rejection-date,
+	.rejection-by {
+		color: #dc2626;
+		font-weight: 500;
+		font-size: 14px;
+	}
+
+	.progress-summary {
+		display: grid;
+		grid-template-columns: 2fr 3fr;
+		gap: 24px;
+		align-items: start;
+	}
+
+	.progress-visual {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.progress-header-detail {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.progress-percentage-large {
+		font-size: 32px;
+		font-weight: 700;
+		color: #1e293b;
+	}
+
+	.progress-status-detail {
+		font-size: 14px;
+		font-weight: 600;
+		padding: 6px 16px;
+		border-radius: 20px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.progress-status-detail.on-track {
+		background: #dbeafe;
+		color: #2563eb;
+	}
+
+	.progress-status-detail.overdue {
+		background: #fee2e2;
+		color: #dc2626;
+	}
+
+	.progress-status-detail.completed {
+		background: #d1fae5;
+		color: #059669;
+	}
+
+	.progress-bar-detail {
+		width: 100%;
+		height: 16px;
+		background: #e5e7eb;
+		border-radius: 8px;
+		overflow: hidden;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+	}
+
+	.progress-fill-detail {
+		height: 100%;
+		border-radius: 8px;
+		transition: width 0.8s ease-in-out;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.progress-fill-detail::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: linear-gradient(
+			90deg,
+			transparent 0%,
+			rgba(255, 255, 255, 0.4) 50%,
+			transparent 100%
+		);
+		animation: shimmer 2.5s infinite;
+	}
+
+	.progress-fill-detail.on-track {
+		background: linear-gradient(90deg, #3b82f6, #2563eb);
+		box-shadow: 0 1px 3px rgba(59, 130, 246, 0.4);
+	}
+
+	.progress-fill-detail.overdue {
+		background: linear-gradient(90deg, #ef4444, #dc2626);
+		box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);
+	}
+
+	.progress-fill-detail.completed {
+		background: linear-gradient(90deg, #10b981, #059669);
+		box-shadow: 0 1px 3px rgba(16, 185, 129, 0.4);
+	}
+
+	.progress-stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+	}
+
+	.stat-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 16px;
+		background: #f8fafc;
+		border-radius: 12px;
+		border: 1px solid #e2e8f0;
+	}
+
+	.stat-label {
+		font-size: 12px;
+		color: #64748b;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.stat-value {
+		font-size: 16px;
+		color: #1e293b;
+		font-weight: 600;
+	}
+
+	.stat-value.paid {
+		color: #059669;
+	}
+
+	.stat-value.remaining {
+		color: #dc2626;
+	}
+
+	.payment-history {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.payment-item {
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 12px;
+		padding: 20px;
+		transition: all 0.2s ease;
+	}
+
+	.payment-item:hover {
+		border-color: #3b82f6;
+		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+	}
+
+	.payment-item.latest {
+		background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+		border-color: #0ea5e9;
+	}
+
+	.payment-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.payment-number {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.payment-badge {
+		background: #3b82f6;
+		color: white;
+		padding: 4px 12px;
+		border-radius: 16px;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.latest-badge {
+		background: #10b981;
+		color: white;
+		padding: 4px 8px;
+		border-radius: 12px;
+		font-size: 10px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.payment-amount {
+		font-size: 18px;
+		font-weight: 700;
+		color: #059669;
+	}
+
+	.payment-details {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.payment-meta {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 12px;
+	}
+
+	.meta-item {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.meta-label {
+		font-size: 11px;
+		color: #64748b;
+		font-weight: 500;
+	}
+
+	.meta-value {
+		font-size: 13px;
+		color: #1e293b;
+		font-weight: 500;
+	}
+
+	.payment-notes {
+		background: #f1f5f9;
+		padding: 12px;
+		border-radius: 8px;
+		border-left: 4px solid #3b82f6;
+	}
+
+	.notes-label {
+		font-size: 12px;
+		color: #64748b;
+		font-weight: 500;
+		display: block;
+		margin-bottom: 4px;
+	}
+
+	.notes-text {
+		font-size: 13px;
+		color: #374151;
+		line-height: 1.4;
+	}
+
+	.no-history {
+		text-align: center;
+		padding: 40px 20px;
+		color: #64748b;
+	}
+
+	.no-history-icon {
+		font-size: 48px;
+		margin-bottom: 16px;
+	}
+
+	.no-history h5 {
+		margin: 0 0 8px 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: #374151;
+	}
+
+	.no-history p {
+		margin: 0;
+		font-size: 14px;
+	}
+
 	/* Responsive */
 	@media (max-width: 768px) {
 		.page-container {
@@ -915,5 +3066,102 @@
 		.pagination {
 			flex-wrap: wrap;
 		}
+
+		.payment-progress {
+			min-width: auto;
+		}
+
+		.progress-text {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 4px;
+		}
+
+		.progress-amounts {
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.modal-overlay {
+			padding: 10px;
+		}
+
+		.modal-content {
+			max-height: 95vh;
+		}
+
+		.modal-header {
+			padding: 16px 16px 0;
+		}
+
+		.modal-body {
+			padding: 0 16px 16px;
+		}
+
+		.modal-footer {
+			padding: 0 16px 16px;
+			flex-direction: column;
+		}
+
+		.form-group input,
+		.form-group textarea {
+			padding: 10px 12px;
+		}
+
+		/* Detail Modal Responsive */
+		.modal-content-wide {
+			max-width: 95vw;
+		}
+
+		.info-grid {
+			grid-template-columns: 1fr;
+			gap: 12px;
+		}
+
+		.progress-summary {
+			grid-template-columns: 1fr;
+			gap: 16px;
+		}
+
+		.progress-stats {
+			grid-template-columns: 1fr;
+			gap: 12px;
+		}
+
+		.payment-meta {
+			grid-template-columns: 1fr;
+			gap: 8px;
+		}
+
+		.payment-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.data-table th:nth-child(3),
+		.data-table td:nth-child(3),
+		.data-table th:nth-child(4),
+		.data-table td:nth-child(4) {
+			display: none;
+		}
+
+		.progress-text {
+			font-size: 12px;
+		}
+
+		.progress-percentage {
+			font-size: 12px;
+		}
+
+		.btn {
+			padding: 6px 12px;
+			font-size: 12px;
+		}
 	}
 </style>
+
+<!-- Notification Container -->
+<NotificationContainer />

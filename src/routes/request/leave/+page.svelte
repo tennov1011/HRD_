@@ -17,6 +17,13 @@
 		createLeaveCategory,
 		getAllLeaveCategories
 	} from '$lib/services/leaveCategoryService.js';
+	import {
+		calculateRemainingAnnualLeave,
+		isAnnualLeaveCategory,
+		formatRemainingLeaveDisplay,
+		calculateDaysBetweenDates,
+		ANNUAL_LEAVE_SETTINGS
+	} from '$lib/services/annualLeaveService.js';
 	import { userEmail } from '$lib/services/firebaseConfig.js';
 	import { isDivisionMatch } from '$lib/utils/divisionMapping.js';
 	import ApprovalStatus from '$lib/component/ApprovalStatus.svelte';
@@ -66,6 +73,11 @@
 	let toastMessage = '';
 	let showToast = false;
 	let toastType = 'success'; // success, error, info
+
+	// Annual leave tracking
+	/** @type {Map<string, any>} */
+	let annualLeaveCache = new Map();
+	let loadingAnnualLeave = new Set();
 
 	$: filteredRequests = filterRequests(leaveRequests, searchTerm, statusFilter, typeFilter);
 	$: userFilteredRequests =
@@ -726,6 +738,109 @@
 		// If it's already a string (name), return it
 		return typeof categoryValue === 'string' ? categoryValue : 'Tidak ada kategori';
 	}
+
+	/**
+	 * Load annual leave data for an employee
+	 * @param {string} userIdOrEmail - User ID or email
+	 * @param {number} year - Year to calculate for
+	 */
+	async function loadAnnualLeaveData(userIdOrEmail, year = new Date().getFullYear()) {
+		if (!userIdOrEmail) return null;
+
+		const cacheKey = `${userIdOrEmail}-${year}`;
+		
+		// Return cached data if available
+		if (annualLeaveCache.has(cacheKey)) {
+			return annualLeaveCache.get(cacheKey);
+		}
+
+		// Prevent multiple simultaneous requests for the same user
+		if (loadingAnnualLeave.has(cacheKey)) {
+			return null;
+		}
+
+		try {
+			loadingAnnualLeave.add(cacheKey);
+			console.log('🏖️ Loading annual leave data for:', userIdOrEmail);
+
+			const result = await calculateRemainingAnnualLeave(userIdOrEmail, year);
+			
+			if (result.success && result.data) {
+				annualLeaveCache.set(cacheKey, result.data);
+				// Trigger reactivity
+				annualLeaveCache = annualLeaveCache;
+				return result.data;
+			} else {
+				console.warn('Failed to load annual leave data:', 'Service returned no data');
+				return null;
+			}
+		} catch (error) {
+			console.error('Error loading annual leave data:', error);
+			return null;
+		} finally {
+			loadingAnnualLeave.delete(cacheKey);
+		}
+	}
+
+	/**
+	 * Get annual leave data for display
+	 * @param {any} request - Leave request object
+	 */
+	function getAnnualLeaveData(request) {
+		if (!request) return null;
+
+		const categoryName = getCategoryName(request.leave_type || request.kategori);
+		if (!isAnnualLeaveCategory(categoryName)) {
+			return null;
+		}
+
+		const userIdOrEmail = request.user_id || request.email || request.employee_email;
+		const year = new Date().getFullYear();
+		const cacheKey = `${userIdOrEmail}-${year}`;
+
+		return annualLeaveCache.get(cacheKey) || null;
+	}
+
+	/**
+	 * Load annual leave data for all annual leave requests in the current view
+	 */
+	async function loadAnnualLeaveForVisibleRequests() {
+		const annualLeaveRequests = paginatedRequests.filter(request => {
+			const categoryName = getCategoryName(request.leave_type || request.kategori);
+			return isAnnualLeaveCategory(categoryName);
+		});
+
+		console.log('🏖️ Loading annual leave for', annualLeaveRequests.length, 'requests');
+
+		// Load annual leave data for each unique user
+		const uniqueUsers = [...new Set(annualLeaveRequests.map(req => 
+			req.user_id || req.email || req.employee_email
+		))].filter(Boolean);
+
+		await Promise.all(uniqueUsers.map(userIdOrEmail => 
+			loadAnnualLeaveData(userIdOrEmail)
+		));
+	}
+
+	/**
+	 * Calculate requested days for a leave request
+	 * @param {any} request - Leave request object
+	 */
+	function getRequestedDays(request) {
+		if (request.type === 'hours') return 0;
+		
+		const startDate = request.start_date || request.tanggal_mulai;
+		const endDate = request.end_date || request.tanggal_selesai;
+		
+		if (!startDate || !endDate) return 1;
+		
+		return calculateDaysBetweenDates(startDate, endDate);
+	}
+
+	// Reactive statement to load annual leave data when requests change
+	$: if (paginatedRequests.length > 0) {
+		loadAnnualLeaveForVisibleRequests();
+	}
 </script>
 
 <svelte:head>
@@ -733,6 +848,48 @@
 </svelte:head>
 
 <div class="leave-requests-page">
+	<!-- Annual Leave Summary -->
+	{#if userFilteredRequests.some(req => isAnnualLeaveCategory(getCategoryName(req.leave_type || req.kategori)))}
+		{@const annualLeaveRequests = userFilteredRequests.filter(req => isAnnualLeaveCategory(getCategoryName(req.leave_type || req.kategori)))}
+		<div class="annual-leave-summary">
+			<div class="summary-header">
+				<h3>📊 Ringkasan Cuti Tahunan {new Date().getFullYear()}</h3>
+				<p class="summary-description">
+					Kuota cuti tahunan: <strong>{ANNUAL_LEAVE_SETTINGS.TOTAL_DAYS_PER_YEAR} hari</strong> per karyawan (1 Jan - 31 Des)
+				</p>
+				<div class="annual-leave-notice">
+					<span class="notice-icon">ℹ️</span>
+					<span class="notice-text">
+						Sisa cuti tahunan ditampilkan otomatis untuk setiap pengajuan dengan kategori "Cuti Tahunan"
+					</span>
+				</div>
+			</div>
+			<div class="summary-stats">
+				<div class="stat-card">
+					<div class="stat-icon">📋</div>
+					<div class="stat-content">
+						<div class="stat-number">{annualLeaveRequests.length}</div>
+						<div class="stat-label">Pengajuan Cuti Tahunan</div>
+					</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-icon">✅</div>
+					<div class="stat-content">
+						<div class="stat-number">{annualLeaveRequests.filter(req => req.status === 'approved' || req.approval_stage === 'direktur').length}</div>
+						<div class="stat-label">Sudah Disetujui</div>
+					</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-icon">⏳</div>
+					<div class="stat-content">
+						<div class="stat-number">{annualLeaveRequests.filter(req => req.status === 'pending' || (req.approval_stage && req.approval_stage !== 'direktur')).length}</div>
+						<div class="stat-label">Menunggu Persetujuan</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Header Actions -->
 	<div class="page-actions">
 		<!-- Connection Status -->
@@ -952,6 +1109,51 @@
 										<span class="leave-category"
 											>{getCategoryName(request.leave_type || request.kategori)}</span
 										>
+										
+										<!-- Annual Leave Information -->
+										{#if isAnnualLeaveCategory(getCategoryName(request.leave_type || request.kategori))}
+											{@const annualLeaveData = getAnnualLeaveData(request)}
+											{@const requestedDays = getRequestedDays(request)}
+											
+											{#if annualLeaveData}
+												{@const displayInfo = formatRemainingLeaveDisplay(annualLeaveData.remainingDays, annualLeaveData.totalAnnualLeave)}
+												{@const hasLatestUpdate = annualLeaveData.breakdown?.latestRequest}
+												<div class="annual-leave-info {displayInfo.class}" style="color: {displayInfo.color}">
+													<div class="leave-summary">
+														<span class="leave-icon">🏖️</span>
+														<span class="leave-text">{displayInfo.text}</span>
+														{#if hasLatestUpdate}
+															<span class="latest-indicator" title="Data terkini berdasarkan pengajuan terakhir">📊</span>
+														{/if}
+													</div>
+													<div class="leave-details">
+														<span class="detail-item">Disetujui: {annualLeaveData.usedDays} hari</span>
+														{#if annualLeaveData.pendingDays > 0}
+															<span class="detail-item pending-info">Menunggu: {annualLeaveData.pendingDays} hari</span>
+														{/if}
+														{#if requestedDays > 0}
+															<span class="detail-item">Pengajuan ini: {requestedDays} hari</span>
+															<span class="detail-item remaining-after" 
+																style="color: {requestedDays > annualLeaveData.availableAfterPending ? '#ef4444' : '#059669'}">
+																Sisa setelah: {Math.max(0, annualLeaveData.availableAfterPending - requestedDays)} hari
+															</span>
+														{/if}
+														{#if annualLeaveData.breakdown?.totalRequests > 1}
+															<span class="detail-item total-requests">
+																Total pengajuan: {annualLeaveData.breakdown.totalRequests} 
+																({annualLeaveData.breakdown.approvedCount} disetujui, {annualLeaveData.breakdown.pendingCount} menunggu)
+															</span>
+														{/if}
+													</div>
+												</div>
+											{:else}
+												<div class="annual-leave-loading">
+													<span class="loading-icon">⏳</span>
+													<span class="loading-text">Memuat data cuti...</span>
+												</div>
+											{/if}
+										{/if}
+										
 										<!-- <span class="type-badge {getTypeBadgeClass(request.type)}">
 											{getTypeText(request.type)}
 										</span> -->
@@ -1839,6 +2041,208 @@
 		font-size: 12px;
 		font-weight: 500;
 		border: 1px solid #bae6fd;
+	}
+
+	/* Annual Leave Summary */
+	.annual-leave-summary {
+		background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+		border: 1px solid #cbd5e1;
+		border-radius: 12px;
+		padding: 24px;
+		margin: 20px 0;
+		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+	}
+
+	.summary-header {
+		margin-bottom: 20px;
+	}
+
+	.summary-header h3 {
+		color: #1e293b;
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin-bottom: 8px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.summary-description {
+		color: #64748b;
+		font-size: 0.95rem;
+		margin-bottom: 12px;
+	}
+
+	.annual-leave-notice {
+		background: #dbeafe;
+		border: 1px solid #93c5fd;
+		border-radius: 8px;
+		padding: 12px 16px;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.notice-icon {
+		font-size: 1.2rem;
+		color: #1e40af;
+	}
+
+	.notice-text {
+		color: #1e40af;
+		font-size: 0.9rem;
+		font-weight: 500;
+	}
+
+	.summary-stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 16px;
+	}
+
+	.stat-card {
+		background: white;
+		border: 1px solid #e2e8f0;
+		border-radius: 10px;
+		padding: 20px;
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	}
+
+	.stat-card:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.1);
+	}
+
+	.stat-icon {
+		font-size: 2rem;
+		opacity: 0.8;
+	}
+
+	.stat-content {
+		flex: 1;
+	}
+
+	.stat-number {
+		font-size: 1.8rem;
+		font-weight: 700;
+		color: #1e293b;
+		line-height: 1;
+	}
+
+	.stat-label {
+		font-size: 0.85rem;
+		color: #64748b;
+		margin-top: 4px;
+		font-weight: 500;
+	}
+
+	/* Annual Leave Information Styles */
+	.annual-leave-info {
+		margin-top: 6px;
+		padding: 6px 8px;
+		background: rgba(255, 255, 255, 0.8);
+		border-radius: 6px;
+		border: 1px solid currentColor;
+		font-size: 11px;
+	}
+
+	.annual-leave-info.remaining-leave-good {
+		background: rgba(16, 185, 129, 0.1);
+		border-color: rgba(16, 185, 129, 0.3);
+	}
+
+	.annual-leave-info.remaining-leave-low {
+		background: rgba(245, 158, 11, 0.1);
+		border-color: rgba(245, 158, 11, 0.3);
+	}
+
+	.annual-leave-info.remaining-leave-empty {
+		background: rgba(239, 68, 68, 0.1);
+		border-color: rgba(239, 68, 68, 0.3);
+	}
+
+	.leave-summary {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-bottom: 4px;
+		font-weight: 600;
+	}
+
+	.leave-icon {
+		font-size: 10px;
+	}
+
+	.latest-indicator {
+		font-size: 8px;
+		opacity: 0.8;
+		cursor: help;
+	}
+
+	.leave-text {
+		font-size: 10px;
+		line-height: 1.2;
+	}
+
+	.leave-details {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		font-size: 9px;
+		color: #64748b;
+	}
+
+	.detail-item.pending-info {
+		color: #d97706;
+		font-weight: 500;
+	}
+
+	.detail-item.total-requests {
+		color: #6b7280;
+		font-style: italic;
+		padding-top: 2px;
+		border-top: 1px solid rgba(255, 255, 255, 0.3);
+		margin-top: 2px;
+	}
+
+	.detail-item {
+		display: block;
+		line-height: 1.3;
+	}
+
+	.detail-item.remaining-after {
+		font-weight: 600;
+		margin-top: 2px;
+	}
+
+	.annual-leave-loading {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 6px;
+		background: rgba(148, 163, 184, 0.1);
+		border: 1px solid rgba(148, 163, 184, 0.3);
+		border-radius: 4px;
+		font-size: 9px;
+		color: #64748b;
+		margin-top: 6px;
+	}
+
+	.annual-leave-loading .loading-icon {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.submission-date {
