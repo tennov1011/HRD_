@@ -704,7 +704,7 @@
 							>
 								<option value="">Pilih Lokasi Absen</option>
 								{#each lokasiAbsenOptions as option}
-									<option value={option.value}>{option.label}</option>
+									<option value={option.value}>{option.label} | {option.alamat}</option>
 								{/each}
 							</select>
 						</div>

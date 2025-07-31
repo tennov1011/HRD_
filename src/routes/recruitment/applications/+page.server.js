@@ -2,10 +2,62 @@
 import { error, fail } from '@sveltejs/kit';
 import { recruitmentService } from '$lib/services/recruitmentService';
 import { applicantService } from '$lib/services/applicantService';
+import {
+    VITE_DIRECTUS_URL,
+    VITE_DIRECTUS_TOKEN
+} from '$env/static/private';
+
+/**
+ * Helper function to fetch master data
+ */
+async function fetchMasterData() {
+    try {
+        const directusUrl = VITE_DIRECTUS_URL || 'https://directus.eltamaprimaindo.com';
+        const directusToken = VITE_DIRECTUS_TOKEN || 'JaXaSE93k24zq7T2-vZyu3lgNOUgP8fz';
+
+        const response = await fetch(`${directusUrl}/items/master_data?limit=-1`, {
+            headers: {
+                'Authorization': `Bearer ${directusToken}`
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Failed to fetch master_data:', response.status, response.statusText);
+            return {
+                lokasi_absen: []
+            };
+        }
+
+        const result = await response.json();
+        const allMasterData = result.data || [];
+
+        // Filter dan format data lokasi_absen
+        const masterData = {
+            lokasi_absen: allMasterData
+                .filter(/** @param {{category: string, status: string}} item */ item => item.category === 'lokasi_absen' && item.status === 'aktif')
+                .map(/** @param {{nama: string, id: string, alamat?: string}} item */ item => ({
+                    value: item.nama,
+                    label: item.nama,
+                    id: item.id,
+                    alamat: item.alamat || ''
+                }))
+        };
+
+        return masterData;
+    } catch (err) {
+        console.error('Error fetching master data:', err);
+        return {
+            lokasi_absen: []
+        };
+    }
+}
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ url }) {
     try {
+        // First, update any expired jobs to inactive status
+        await recruitmentService.updateExpiredJobsToInactive();
+        
         // Get job ID from query parameter
         const jobId = url.searchParams.get('jobId');
         
@@ -13,8 +65,11 @@ export async function load({ url }) {
         const applicantId = url.searchParams.get('applicantId');
         
         if (!jobId) {
-            // If no job ID, return list of all job postings
+            // If no job ID, return list of all job postings with status field
             const jobPostings = await recruitmentService.getAllJobPostings();
+            
+            // Fetch master data
+            const masterData = await fetchMasterData();
             
             // Jika ada job postings, ambil jumlah pelamar untuk masing-masing lowongan
             if (jobPostings?.data && jobPostings.data.length > 0) {
@@ -42,7 +97,8 @@ export async function load({ url }) {
                 selectedJob: null,
                 applications: [],
                 applicant: null,
-                supportingDocuments: null
+                supportingDocuments: null,
+                masterData
             };
         }
         
@@ -52,6 +108,9 @@ export async function load({ url }) {
         if (!jobResponse?.data) {
             throw error(404, 'Job posting not found');
         }
+        
+        // Fetch master data
+        const masterData = await fetchMasterData();
         
         // Get applications for this job
         const applicationsResponse = await applicantService.getApplicantsByJobId(jobId);
@@ -78,7 +137,8 @@ export async function load({ url }) {
             selectedJob,
             applications: applicationsResponse?.data || [],
             applicant,
-            supportingDocuments
+            supportingDocuments,
+            masterData
         };
     } catch (err) {
         console.error('Error loading applications:', err);
@@ -90,49 +150,6 @@ export async function load({ url }) {
 
 /** @type {import('./$types').Actions} */
 export const actions = {
-    // Update applicant status
-    updateStatus: async ({ request }) => {
-        try {
-            const formData = await request.formData();
-            const id = formData.get('id');
-            const status = formData.get('status'); // UI status (baru, diproses, etc.)
-            const jobId = formData.get('jobId');
-            
-            if (!id || !status || !jobId) {
-                return fail(400, { 
-                    error: 'Missing required fields',
-                    success: false
-                });
-            }
-            
-            // Convert UI status to database status
-            const statusMap = {
-                'baru': 'pending',
-                'diproses': 'reviewed',
-                'wawancara': 'interview', 
-                'tes': 'test',
-                'diterima': 'accepted',
-                'ditolak': 'rejected'
-            };
-            
-            // @ts-ignore - Mengabaikan TypeScript error untuk statusMap
-            const dbStatus = statusMap[String(status)] || 'pending';
-            
-            await applicantService.updateApplicantStatus(String(id), dbStatus);
-            
-            return {
-                success: true,
-                message: 'Applicant status updated successfully'
-            };
-        } catch (err) {
-            console.error('Error updating applicant status:', err);
-            return fail(500, {
-                error: err instanceof Error ? err.message : 'Failed to update applicant status',
-                success: false
-            });
-        }
-    },
-    
     // Upload supporting document
     uploadDocument: async ({ request }) => {
         try {

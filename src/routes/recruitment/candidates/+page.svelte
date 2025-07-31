@@ -12,13 +12,21 @@
     let selectedSource = ''; // New filter for howDidYouHear
     let filteredApplicants = [];
     
-    // Create a mapping of job IDs to job titles
-    const jobTitleMap = new Map();
-    if (jobPostings && jobPostings.length > 0) {
-        jobPostings.forEach(job => {
-            // Store with string ID for consistent comparison
-            jobTitleMap.set(String(job.id), job.title);
-        });
+    // Create a mapping of job IDs to job titles and status
+    let jobTitleMap = new Map();
+    let jobStatusMap = new Map();
+    
+    // Reactive statement to update maps when data changes
+    $: {
+        jobTitleMap = new Map();
+        jobStatusMap = new Map();
+        if (jobPostings && jobPostings.length > 0) {
+            jobPostings.forEach(job => {
+                // Store with string ID for consistent comparison
+                jobTitleMap.set(String(job.id), job.title);
+                jobStatusMap.set(String(job.id), job.status || 'active');
+            });
+        }
     }
     
     // Get unique sources (howDidYouHear) and count applicants per source
@@ -49,6 +57,13 @@
         
         // Return title if found, otherwise provide a better fallback
         return title || `Posisi tidak ditemukan (ID: ${jobId})`;
+    }
+    
+    // Function to check if job is inactive
+    function isJobInactive(jobId) {
+        if (!jobId) return false;
+        const stringJobId = String(jobId);
+        return jobStatusMap.get(stringJobId) === 'inactive';
     }
     
     // Initialize filteredApplicants based on search query, selected job and status
@@ -129,9 +144,26 @@
         }
     }
 </script>
+<svelte:head>
+    <title>Daftar Pelamar</title>
+</svelte:head>
 
 <div class="px-6 py-8 bg-white">
-    <h1 class="text-2xl font-semibold text-gray-900 mb-6">Daftar Pelamar</h1>
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-semibold text-gray-900">Daftar Pelamar</h1>
+        
+        <!-- Refresh Button -->
+        <button 
+            on:click={() => window.location.reload()}
+            class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            title="Refresh data"
+        >
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+        </button>
+    </div>
     
     {#if error}
         <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
@@ -262,7 +294,9 @@
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="text-sm font-medium text-gray-900">
                                     {#if applicant.appliedJobId}
-                                        {jobTitleMap.get(String(applicant.appliedJobId)) || 'Posisi tidak tersedia'}
+                                        <span class:line-through={isJobInactive(applicant.appliedJobId)} class:text-gray-500={isJobInactive(applicant.appliedJobId)}>
+                                            {jobTitleMap.get(String(applicant.appliedJobId)) || 'Posisi tidak tersedia'}
+                                        </span>
                                     {:else}
                                         -
                                     {/if}

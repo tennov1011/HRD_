@@ -121,7 +121,7 @@ export const actions = {
             console.log('Job posting created successfully:', result);
 
             // Redirect back to recruitment page
-            throw redirect(303, '/recruitment');
+            throw redirect(303, '/recruitment/list');
 
         } catch (error) {
             // Check if this is a redirect error (has status property)

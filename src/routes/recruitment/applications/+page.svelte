@@ -9,21 +9,18 @@
 	$: selectedJob = data.selectedJob;
 	$: applications = data.applications || [];
 	$: jobPostings = data.jobPostings || [];
-	$: applicant = data.applicant;
+	$: masterData = data.masterData || { lokasi_absen: [] };
 
-	// Function to map database fields to expected format
-	function mapApplicantData(dbData) {
-		if (!dbData) return null;
-
-		return {
-			id: dbData.id,
-			jobId: dbData.appliedJobId
-		};
+	// Helper function to get location display with address
+	function getLocationDisplay(locationValue) {
+		if (!locationValue || !masterData.lokasi_absen) return locationValue || 'Not specified';
+		
+		const location = masterData.lokasi_absen.find(lokasi => lokasi.value === locationValue);
+		if (location && location.alamat) {
+			return `${location.value} | ${location.alamat}`;
+		}
+		return locationValue;
 	}
-
-	// Map applications array
-	$: mappedApplications = applications.map(mapApplicantData);
-	$: mappedApplicant = mapApplicantData(applicant);
 
 	// Format requirements for display
 	function formatRequirements(requirements) {
@@ -39,6 +36,12 @@
 		}
 		return [];
 	}
+
+	// Function to check if job is inactive
+	// Jobs are automatically marked as inactive when they pass their deadline
+	function isJobInactive(job) {
+		return job.status === 'inactive';
+	}
 </script>
 
 <svelte:head>
@@ -49,12 +52,12 @@
 	{#if !selectedJob}
 		<!-- Job Selection Screen -->
 		<div>
-			<h1 class="mb-6 text-2xl font-bold">Select a Job Posting</h1>
+			<h1 class="mb-6 text-2xl font-bold">Pilih Lowongan</h1>
 
 			{#if jobPostings.length === 0}
 				<div class="rounded-lg bg-gray-50 p-6 text-center shadow-sm">
-					<p class="text-gray-500">No job postings found.</p>
-					<a href="/recruitment" class="mt-2 inline-block text-blue-600 hover:underline">
+					<p class="text-gray-500">Lowongan tidak ditemukan.</p>
+					<a href="/recruitment/list" class="mt-2 inline-block text-blue-600 hover:underline">
 						Go to job postings
 					</a>
 				</div>
@@ -65,12 +68,24 @@
 							href={`/recruitment/applications?jobId=${job.id}`}
 							class="block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
 						>
-							<h3 class="mb-2 text-lg font-medium text-gray-900">{job.title}</h3>
-							<p class="mb-2 text-sm text-gray-500">Department: {job.department}</p>
-							<p class="mb-4 text-sm text-gray-500">Deadline: {formatDate(job.deadline)}</p>
+							<h3
+								class="mb-2 text-lg font-medium text-gray-900"
+								class:line-through={isJobInactive(job)}
+							>
+								{job.title}
+							</h3>
+							<p class="mb-2 text-sm text-gray-500" class:line-through={isJobInactive(job)}>
+								Department: {job.department}
+							</p>
+							<p class="mb-4 text-sm text-gray-500" class:line-through={isJobInactive(job)}>
+								Deadline: {formatDate(job.deadline)}
+							</p>
 
 							<div class="flex items-center justify-between">
-								<span class="text-sm font-medium text-blue-600">
+								<span
+									class="text-sm font-medium text-blue-600"
+									class:line-through={isJobInactive(job)}
+								>
 									{job.applicantCount || 0} pelamar
 								</span>
 								<span
@@ -84,13 +99,14 @@
 				</div>
 			{/if}
 		</div>
-	{:else if mappedApplicant}
-		<!-- Single Applicant View -->
+	{:else}
+		<!-- Job Applications View -->
 		<div>
 			<!-- Header with navigation -->
 			<div class="mb-8 flex items-center">
 				<a
-					href={`/recruitment/applications?jobId=${selectedJob.id}`}
+					href="/recruitment/applications
+				"
 					class="mr-4 text-gray-500 hover:text-gray-700"
 				>
 					<svg
@@ -106,32 +122,26 @@
 						/>
 					</svg>
 				</a>
-				<h1 class="text-2xl font-bold">
-					{applicant?.fullName || 'Applicant'} - {selectedJob.title}
-				</h1>
-			</div>
-		</div>
-	{:else}
-		<!-- Job Applications View -->
-		<div>
-			<!-- Header with navigation -->
-			<div class="mb-8 flex items-center">
-				<a href="/recruitment" class="mr-4 text-gray-500 hover:text-gray-700">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						class="h-5 w-5"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-					>
-						<path
-							fill-rule="evenodd"
-							d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-							clip-rule="evenodd"
-						/>
-					</svg>
-				</a>
 				<h1 class="text-2xl font-bold">Applications: {selectedJob.title}</h1>
 			</div>
+
+			<!-- Status Messages -->
+			{#if form?.success}
+				<div class="mb-6 border-l-4 border-green-500 bg-green-100 p-4 text-green-700" role="alert">
+					<p class="font-bold">Success!</p>
+					<p>{form.message}</p>
+					{#if form.message.includes('accepted')}
+						<p class="text-sm mt-1">💼 Pelamar yang diterima akan otomatis ditambahkan ke database register sebagai karyawan baru.</p>
+					{/if}
+				</div>
+			{/if}
+
+			{#if form?.error}
+				<div class="mb-6 border-l-4 border-red-500 bg-red-100 p-4 text-red-700" role="alert">
+					<p class="font-bold">Error</p>
+					<p>{form.error}</p>
+				</div>
+			{/if}
 
 			<!-- Job details -->
 			<div class="mb-8 rounded-lg bg-white shadow">
@@ -160,25 +170,25 @@
 					</a>
 				</div>
 				<div class="px-6 py-5">
-					<dl class="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2">
+					<dl class="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Title</dt>
+							<dt class="text-sm font-medium text-gray-500">Lowongan</dt>
 							<dd class="mt-1 text-sm text-gray-900">{selectedJob.title}</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Department</dt>
+							<dt class="text-sm font-medium text-gray-500">Departemen</dt>
 							<dd class="mt-1 text-sm text-gray-900">{selectedJob.department}</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Job Location</dt>
-							<dd class="mt-1 text-sm text-gray-900">{selectedJob.location || 'Not specified'}</dd>
+							<dt class="text-sm font-medium text-gray-500">Lokasi Pekerjaan</dt>
+							<dd class="mt-1 text-sm text-gray-900">{getLocationDisplay(selectedJob.location)}</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Salary Range</dt>
+							<dt class="text-sm font-medium text-gray-500">Rentang Gaji</dt>
 							<dd class="mt-1 text-sm text-gray-900">{selectedJob.salary || 'Not specified'}</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Employment Type</dt>
+							<dt class="text-sm font-medium text-gray-500">Status Waktu Kerja</dt>
 							<dd class="mt-1 text-sm text-gray-900">
 								{#if selectedJob.employment_type}
 									<span
@@ -212,7 +222,7 @@
 							</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Minimum Education</dt>
+							<dt class="text-sm font-medium text-gray-500">Pendidikan Minimal</dt>
 							<dd class="mt-1 text-sm text-gray-900">
 								{#if selectedJob.min_education}
 									<span
@@ -236,7 +246,7 @@
 							</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Experience Required</dt>
+							<dt class="text-sm font-medium text-gray-500">Pengalaman Kerja</dt>
 							<dd class="mt-1 text-sm text-gray-900">
 								{#if selectedJob.experience}
 									<span
@@ -260,33 +270,33 @@
 							</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Application Deadline</dt>
+							<dt class="text-sm font-medium text-gray-500">Deadline Lowongan</dt>
 							<dd class="mt-1 text-sm text-gray-900">{formatDate(selectedJob.deadline, 'long')}</dd>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Date Posted</dt>
-							<dd class="mt-1 text-sm text-gray-900">
-								{formatDate(selectedJob.date_created, 'long')}
-							</dd>
-						</div>
-						<div>
-							<dt class="text-sm font-medium text-gray-500">Description</dt>
+							<dt class="text-sm font-medium text-gray-500">Deskripsi</dt>
 							<dd class="mt-1 text-sm whitespace-pre-wrap text-gray-900">
 								{selectedJob.description}
 							</dd>
+							<div>
+								<dt class="text-sm font-medium text-gray-500">Syarat / Kualifikasi</dt>
+								<dd class="mt-1 text-sm text-gray-900">
+									{#if selectedJob.requirements}
+										<ul class="list-inside list-disc space-y-1">
+											{#each formatRequirements(selectedJob.requirements) as requirement}
+												<li>{requirement}</li>
+											{/each}
+										</ul>
+									{:else}
+										<span class="text-gray-500">No requirements specified</span>
+									{/if}
+								</dd>
+							</div>
 						</div>
 						<div>
-							<dt class="text-sm font-medium text-gray-500">Requirements</dt>
+							<dt class="text-sm font-medium text-gray-500">Tanggal Publikasi</dt>
 							<dd class="mt-1 text-sm text-gray-900">
-								{#if selectedJob.requirements}
-									<ul class="list-inside list-disc space-y-1">
-										{#each formatRequirements(selectedJob.requirements) as requirement}
-											<li>{requirement}</li>
-										{/each}
-									</ul>
-								{:else}
-									<span class="text-gray-500">No requirements specified</span>
-								{/if}
+								{formatDate(selectedJob.date_created, 'long')}
 							</dd>
 						</div>
 					</dl>
@@ -305,35 +315,35 @@
 						<thead class="bg-gray-50">
 							<tr>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Nama</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Email</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Status</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Pengalaman</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Pendidikan</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Sumber</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Tanggal</th
 								>
 								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-800 uppercase"
 									>Aksi</th
 								>
 							</tr>
@@ -344,7 +354,7 @@
 									<td class="px-4 py-3 text-sm font-medium whitespace-nowrap text-gray-900"
 										>{application.fullName || 'Nama tidak tersedia'}</td
 									>
-									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-500"
+									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-800"
 										>{application.email || '-'}</td
 									>
 									<td class="px-4 py-3 whitespace-nowrap">
@@ -366,16 +376,16 @@
 											{application.applicationStatus || 'Pending'}
 										</span>
 									</td>
-									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-500"
+									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-800"
 										>{application.workExperienceYears || 0} tahun</td
 									>
-									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-500"
+									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-800"
 										>{application.highestEducation || '-'}</td
 									>
-									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-500"
+									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-800"
 										>{application.howDidYouHear || '-'}</td
 									>
-									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-500"
+									<td class="px-4 py-3 text-sm whitespace-nowrap text-gray-800"
 										>{formatDate(application.date_created)}</td
 									>
 									<td class="px-4 py-3 text-sm whitespace-nowrap">
@@ -403,6 +413,7 @@
 													CV
 												</a>
 											{/if}
+											
 											<a
 												href={`/recruitment/candidates/${application.id}`}
 												class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-2 text-sm leading-4 font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"

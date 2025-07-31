@@ -131,3 +131,30 @@ export function getRelativeTimeString(date) {
         return formatDate(dateObj);
     }
 }
+
+/**
+ * Check if a date has passed (is in the past)
+ * @param {string|Date} date - Date to check
+ * @returns {boolean} True if date has passed
+ */
+export function isDatePassed(date) {
+    if (!date) return false;
+    
+    const targetDate = new Date(date);
+    const today = new Date();
+    
+    // Set today to start of day for fair comparison
+    today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    return targetDate < today;
+}
+
+/**
+ * Check if job deadline has passed
+ * @param {Object} job - Job object with deadline property
+ * @returns {boolean} True if deadline has passed
+ */
+export function isJobExpired(job) {
+    return job?.deadline ? isDatePassed(job.deadline) : false;
+}

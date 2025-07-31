@@ -48,17 +48,18 @@
   
   // Get effective status berdasarkan status field dan deadline
   function getEffectiveStatus(job) {
-    // Jika ada field status, gunakan itu terlebih dahulu
+    // Sekarang status dalam database sudah terupdate otomatis untuk job yang expired
+    // Jadi kita hanya perlu mengecek field status dari database
     if (job.status === 'inactive') {
       return 'inactive';
     }
     
-    // Jika deadline sudah lewat, otomatis expired meskipun status active
+    // Untuk job yang masih active, cek deadline sebagai backup
     if (isExpiredByDeadline(job.deadline)) {
       return 'expired';
     }
     
-    // Default ke active jika status active dan deadline belum lewat
+    // Default ke active
     return 'active';
   }
   
@@ -110,12 +111,12 @@
 </script>
 
 <svelte:head>
-  <title>Recruitment - Job Postings</title>
+  <title>Daftar Lowongan Pekerjaan</title>
 </svelte:head>
 
 <div class="container mx-auto px-4 py-8">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Job Postings</h1>
+    <h1 class="text-2xl font-bold text-gray-800">Lowongan </h1>
     
     <div class="flex items-center space-x-4">
       <!-- Filter Toggle -->

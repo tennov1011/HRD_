@@ -32,13 +32,16 @@ export async function load() {
         
         // Function to get all job postings (for filter dropdown)
         async function getAllJobPostings() {
-            const endpoint = '/items/job_postings?fields=id,title&sort=-date_created';
+            // Add timestamp to prevent caching
+            const timestamp = Date.now();
+            const endpoint = `/items/job_postings?fields=id,title,status&sort=-date_created&_t=${timestamp}`;
             
             const url = `${recruitmentService.baseURL}${endpoint}`;
             const config = {
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${recruitmentService.token}`
+                    Authorization: `Bearer ${recruitmentService.token}`,
+                    'Cache-Control': 'no-cache'
                 }
             };
             

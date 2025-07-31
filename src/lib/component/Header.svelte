@@ -2,11 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { onMount, onDestroy } from 'svelte';
+	import NotificationBell from './NotificationBell.svelte';
 	import {
-		userRole,
-		userEmail,
-		userName,
-		userDepartment,
 		isAuthenticated as authStore,
 		setUserStores,
 		clearUserStores
@@ -331,14 +328,10 @@
 						<span class="text-lg font-bold text-white">HRD</span>
 					</div>
 					<div>
-						<h1 class="text-xl font-bold text-gray-800">
-							Dashboard {getRoleDisplayName(currentUserRole)}
-						</h1>
+						<h1 class="text-xl font-bold text-gray-800">Dashboard HRD</h1>
 						<p class="text-sm font-medium text-gray-600">
 							{#if currentUserDepartment}
-								Selamat datang, {currentUserDepartment} • {getRoleDisplayName(currentUserRole)}
-							{:else}
-								"Guiding Every Request, Fulfilling Every Need"
+								Selamat datang di pusat kendali SDM, {getRoleDisplayName(currentUserRole)} - Kelola talenta, pantau kehadiran, dan wujudkan tim hebat hari ini!
 							{/if}
 						</p>
 					</div>
@@ -363,20 +356,7 @@
 				</div>
 
 				<!-- Notifications -->
-				<button
-					class="relative rounded-lg p-2.5 text-slate-600 transition-all hover:bg-slate-100 hover:text-slate-800 hover:shadow-sm"
-					aria-label="Notifikasi"
-				>
-					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M15 17h5l-3.5-3.5a4 4 0 011.5-3 6 6 0 00-12 0 4 4 0 011.5 3L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-						/>
-					</svg>
-					<span class="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-sm"></span>
-				</button>
+				<NotificationBell />
 
 				<!-- User Profile Dropdown -->
 				<div class="relative">

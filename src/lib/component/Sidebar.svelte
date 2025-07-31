@@ -28,11 +28,11 @@
 			label: 'Kehadiran',
 			icon: '⏰',
 			hasDropdown: true,
-				subMenus: [
-					{ label: 'Presensi Harian', href: '/attendance/daily', icon: '📅' },
-					{ label: 'Presensi Bulanan', href: '/attendance/monthly', icon: '📊' },
-					{ label: 'Daftar Libur', href: '/attendance/holidays', icon: '🏖️' },
-				]
+			subMenus: [
+				{ label: 'Presensi Harian', href: '/attendance/daily', icon: '📅' },
+				{ label: 'Presensi Bulanan', href: '/attendance/monthly', icon: '📊' },
+				{ label: 'Daftar Libur', href: '/attendance/holidays', icon: '🏖️' }
+			]
 		},
 		{
 			label: 'Pengajuan Karyawan',
@@ -64,18 +64,18 @@
 				{ label: 'Lokasi Presensi', href: '/masterdata/lokasi-absen', icon: '📍' }
 			]
 		},
-		{ 
+		{
 			label: 'Rekrutmen',
 			hasDropdown: true,
 			icon: '📝',
 			subMenus: [
 				{ label: 'Tambah Lowongan', href: '/recruitment/add', icon: '➕' },
 				{ label: 'Daftar Lowongan', href: '/recruitment/list', icon: '📢' },
-				{ label: 'Detail Lowongan', href: '/recruitment/applications', icon: '👤' },
+				{ label: 'Detail Lowongan', href: '/recruitment/applications', icon: '🗂️' },
 				{ label: 'Daftar Pelamar', href: '/recruitment/candidates', icon: '👥' }
 			]
 		},
-		{ 
+		{
 			label: 'Training',
 			hasDropdown: true,
 			icon: '📚',
@@ -86,13 +86,13 @@
 				{ label: 'Rekapitulasi Evaluasi Training', href: '/training/recap', icon: '📊' }
 			]
 		},
-		{ 
+		{
 			label: 'Document',
 			hasDropdown: true,
 			icon: '📄',
 			subMenus: [
 				{ label: 'Tambah Dokumen', href: '/documents/add', icon: '➕' },
-				{ label: 'Daftar Dokumen', href: '/documents/list', icon: '📊' },
+				{ label: 'Daftar Dokumen', href: '/documents/list', icon: '📑' }
 			]
 		}
 	];
@@ -105,18 +105,18 @@
 
 	// Initialize dropdown state only on first load
 	let initialized = false;
-	
+
 	$: {
 		// Only auto-expand on initial load, not on every route change
 		if (!initialized && currentPath) {
 			const newExpandedMenus = {};
-			
+
 			menuItems.forEach((item, index) => {
 				if (item.hasDropdown && isSubmenuActive(item.subMenus)) {
 					newExpandedMenus[index] = true;
 				}
 			});
-			
+
 			expandedMenus = newExpandedMenus;
 			initialized = true;
 		}

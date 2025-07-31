@@ -11,10 +11,10 @@
 	// Animation state
 	let loaded = false;
 	let showImageModal = false;
-	
+
 	// Status update state - make reactive to applicant data
 	let showStatusModal = false;
-	$: selectedStatus = applicant?.applicationStatus || 'Diproses';
+	let selectedStatus = '';
 	$: note = applicant?.note || '';
 	let isUpdating = false;
 
@@ -75,33 +75,40 @@
 	// Function to get status badge color
 	function getStatusClass(status) {
 		switch (status) {
-			case 'Diproses':
+			case 'pending':
+			case 'reviewed':
 				return 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white shadow-lg';
-			case 'Interview':
+			case 'interview':
 				return 'bg-gradient-to-r from-purple-400 to-purple-500 text-white shadow-lg';
-			case 'Lolos':
+			case 'accepted':
 				return 'bg-gradient-to-r from-green-400 to-green-500 text-white shadow-lg';
-			case 'Ditolak':
+			case 'rejected':
 				return 'bg-gradient-to-r from-red-400 to-red-500 text-white shadow-lg';
 			default:
 				return 'bg-gradient-to-r from-gray-400 to-gray-500 text-white shadow-lg';
 		}
 	}
 
-	// Function to get status icon
-	function getStatusIcon(status) {
+	// Function to get status icon and display text
+	function getStatusDisplay(status) {
 		switch (status) {
-			case 'Diproses':
-				return '⏳';
-			case 'Interview':
-				return '🗣️';
-			case 'Lolos':
-				return '✅';
-			case 'Ditolak':
-				return '❌';
+			case 'pending':
+			case 'reviewed':
+				return { icon: '⏳', text: 'Diproses' };
+			case 'interview':
+				return { icon: '🗣️', text: 'Interview' };
+			case 'accepted':
+				return { icon: '✅', text: 'Lolos' };
+			case 'rejected':
+				return { icon: '❌', text: 'Ditolak' };
 			default:
-				return '📋';
+				return { icon: '📋', text: 'Pending' };
 		}
+	}
+
+	// Function to get status icon (backward compatibility)
+	function getStatusIcon(status) {
+		return getStatusDisplay(status).icon;
 	}
 
 	const calculateAge = (birthDate) => {
@@ -118,14 +125,25 @@
 
 	// Handle status update with SvelteKit form actions
 	function openStatusModal() {
-		// Reset to current applicant data
-		selectedStatus = applicant?.applicationStatus || 'Diproses';
+		// Map database status to frontend status
+		const statusMap = {
+			'pending': 'diproses',
+			'reviewed': 'diproses',
+			'interview': 'interview',
+			'accepted': 'lolos',
+			'rejected': 'ditolak'
+		};
+		
+		// Reset to current applicant data with proper mapping
+		const currentDbStatus = applicant?.applicationStatus || 'pending';
+		selectedStatus = statusMap[currentDbStatus] || 'diproses';
 		note = applicant?.note || '';
-		console.log('Opening modal with current data:', { 
-			currentStatus: applicant?.applicationStatus, 
+		
+		console.log('Opening modal with current data:', {
+			currentDbStatus: currentDbStatus,
+			mappedFrontendStatus: selectedStatus,
 			currentNote: applicant?.note,
-			selectedStatus, 
-			note 
+			note
 		});
 		showStatusModal = true;
 	}
@@ -283,7 +301,7 @@
 								<h3 class="text-2xl font-bold text-gray-900">Informasi Personal</h3>
 							</div>
 							<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-								<div class="space-y-4">
+								<div class="space-y-5">
 									<div class="group">
 										<div class="mb-2 flex items-center space-x-2 text-sm font-medium text-gray-500">
 											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -665,7 +683,7 @@
 										)}"
 									>
 										<span class="mr-1">{getStatusIcon(applicant.applicationStatus)}</span>
-										{applicant.applicationStatus || 'pending'}
+										{getStatusDisplay(applicant.applicationStatus).text}
 									</span>
 								</div>
 								<div class="flex items-center justify-between">
@@ -760,6 +778,37 @@
 												<p class="text-xs text-gray-500">Telepon</p>
 											</div>
 										</div>
+									</div>
+								{/if}
+
+								<!-- Whatsapp Number -->
+								{#if applicant.whatsappNumber}
+									<div class="group cursor-pointer">
+										<a
+											href={`https://wa.me/${applicant.whatsappNumber}`}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="flex items-center space-x-3 rounded-lg p-3 transition-colors duration-200 hover:bg-gray-50"
+										>
+											<div
+												class="rounded-lg bg-green-100 p-2 transition-colors duration-200 group-hover:bg-green-200"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													viewBox="0 0 32 32"
+													fill="currentColor"
+													class="h-6 w-6 text-green-600"
+												>
+													<path
+														d="M16 3C9.373 3 4 8.373 4 15c0 2.385.668 4.661 1.934 6.661L4 29l7.523-1.927A12.96 12.96 0 0016 27c6.627 0 12-5.373 12-12S22.627 3 16 3zm0 22c-1.982 0-3.917-.521-5.604-1.507l-.401-.234-4.468 1.145 1.192-4.364-.26-.424A9.93 9.93 0 016 15c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10zm5.255-7.317c-.287-.144-1.697-.838-1.96-.934-.263-.096-.454-.144-.646.144-.192.287-.741.934-.909 1.127-.168.192-.335.216-.622.072-.287-.144-1.213-.447-2.31-1.424-.854-.761-1.43-1.701-1.598-1.988-.168-.287-.018-.443.126-.587.13-.13.287-.335.431-.503.144-.168.192-.287.287-.478.096-.192.048-.359-.024-.503-.072-.144-.646-1.56-.885-2.137-.233-.561-.47-.484-.646-.493-.168-.007-.359-.009-.551-.009-.192 0-.503.072-.767.359-.263.287-1.003.98-1.003 2.389 0 1.409 1.027 2.769 1.171 2.961.144.192 2.022 3.088 4.902 4.203.685.295 1.219.472 1.635.603.687.219 1.312.188 1.805.114.551-.082 1.697-.693 1.938-1.363.24-.67.24-1.244.168-1.363-.072-.119-.263-.192-.551-.335z"
+													/>
+												</svg>
+											</div>
+											<div class="min-w-0 flex-1">
+												<p class="text-sm font-medium text-gray-900">{applicant.whatsappNumber}</p>
+												<p class="text-xs text-gray-500">Hubungi Pelamar</p>
+											</div>
+										</a>
 									</div>
 								{/if}
 							</div>
@@ -994,26 +1043,30 @@
 								</div>
 								<h3 class="text-lg font-bold text-gray-900">Evaluasi & Status</h3>
 							</div>
-							
+
 							<!-- Current Status Display -->
 							<div class="mb-4 rounded-lg bg-gray-50 p-4">
 								<div class="flex items-center justify-between">
 									<span class="text-sm font-medium text-gray-600">Status Saat Ini:</span>
-									<span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium {getStatusClass(applicant.applicationStatus)}">
+									<span
+										class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium {getStatusClass(
+											applicant.applicationStatus
+										)}"
+									>
 										<span class="mr-1">{getStatusIcon(applicant.applicationStatus)}</span>
 										{applicant.applicationStatus || 'Diproses'}
 									</span>
 								</div>
 							</div>
-							
+
 							<!-- Current Note Display -->
 							{#if applicant.note}
 								<div class="mb-4 rounded-lg bg-yellow-50 p-4">
-									<h4 class="text-sm font-medium text-gray-700 mb-2">Catatan Evaluasi:</h4>
-									<p class="text-sm text-gray-600 leading-relaxed">{applicant.note}</p>
+									<h4 class="mb-2 text-sm font-medium text-gray-700">Catatan Evaluasi:</h4>
+									<p class="text-sm leading-relaxed text-gray-600">{applicant.note}</p>
 								</div>
 							{/if}
-							
+
 							<div class="space-y-3">
 								<button
 									on:click={openStatusModal}
@@ -1088,19 +1141,22 @@
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+		class="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black p-4"
 		on:click={() => (showStatusModal = false)}
 		role="dialog"
 		aria-label="Modal update status"
 		tabindex="-1"
 	>
-		<div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" on:click|stopPropagation>
+		<div
+			class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+			on:click|stopPropagation
+		>
 			<!-- Modal Header -->
 			<div class="mb-6 flex items-center justify-between">
 				<h3 class="text-lg font-bold text-gray-900">Update Status & Catatan</h3>
 				<button
 					on:click={closeStatusModal}
-					class="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500"
+					class="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:ring-4 focus:ring-blue-500 focus:outline-none"
 					aria-label="Tutup modal"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1115,45 +1171,51 @@
 			</div>
 
 			<!-- Form with SvelteKit action -->
-			<form 
-				method="POST" 
+			<form
+				method="POST"
 				action="?/updateStatus"
 				use:enhance={() => {
 					isUpdating = true;
 					console.log('Form submission started with data:', { selectedStatus, note });
-					
+
 					return async ({ result, update }) => {
 						console.log('Form result received:', result);
 						isUpdating = false;
-						
+
 						if (result.type === 'success') {
-							// Update local data immediately
+							// Map frontend status to database status for updating local state
+							const statusMap = {
+								'diproses': 'reviewed',
+								'interview': 'interview',
+								'lolos': 'accepted',
+								'ditolak': 'rejected'
+							};
+							
+							// Update local data immediately with database status
 							if (applicant) {
-								applicant.applicationStatus = selectedStatus;
+								applicant.applicationStatus = statusMap[selectedStatus] || selectedStatus;
 								if (note && note.trim()) {
 									applicant.note = note.trim();
 								}
 							}
-							
+
 							// Force reactive update
 							data = { ...data, applicant: { ...applicant } };
-							
+
 							// Close modal
 							closeStatusModal();
-							
+
 							// Show success message
 							setTimeout(() => {
 								alert(result.data?.message || 'Status berhasil diperbarui!');
 							}, 100);
-							
+
 							// Update the page data
 							await update({ reset: false });
-							
 						} else if (result.type === 'failure') {
 							console.error('Form submission failed:', result);
 							alert(result.data?.message || 'Gagal memperbarui status');
 							await update({ reset: false });
-							
 						} else {
 							console.log('Unexpected result type:', result.type);
 							await update();
@@ -1171,12 +1233,12 @@
 						name="status"
 						bind:value={selectedStatus}
 						required
-						class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						class="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					>
-						<option value="Diproses">Diproses</option>
-						<option value="Interview">Interview</option>
-						<option value="Lolos">Lolos</option>
-						<option value="Ditolak">Ditolak</option>
+						<option value="diproses">Diproses</option>
+						<option value="interview">Interview</option>
+						<option value="lolos">Lolos</option>
+						<option value="ditolak">Ditolak</option>
 					</select>
 				</div>
 
@@ -1191,7 +1253,7 @@
 						bind:value={note}
 						rows="4"
 						placeholder="Tambahkan catatan evaluasi untuk pelamar ini..."
-						class="w-full rounded-lg border border-gray-300 px-3 py-2 resize-none focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						class="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					></textarea>
 				</div>
 
@@ -1201,14 +1263,14 @@
 						type="button"
 						on:click={closeStatusModal}
 						disabled={isUpdating}
-						class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-500 disabled:opacity-50"
+						class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 focus:ring-4 focus:ring-gray-500 focus:outline-none disabled:opacity-50"
 					>
 						Batal
 					</button>
 					<button
 						type="submit"
 						disabled={isUpdating || !selectedStatus}
-						class="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500 disabled:opacity-50"
+						class="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:outline-none disabled:opacity-50"
 					>
 						{isUpdating ? 'Menyimpan...' : 'Simpan'}
 					</button>

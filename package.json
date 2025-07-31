@@ -47,8 +47,11 @@
 	},
 	"dependencies": {
 		"axios": "^1.10.0",
+		"date-holidays": "^3.24.4",
+		"dotenv": "^17.2.1",
 		"firebase": "^11.10.0",
 		"jspdf": "^3.0.1",
+		"svelte-calendar": "^3.1.6",
 		"xlsx": "^0.18.5"
 	}
 }

@@ -115,7 +115,45 @@ class ApplicantService {
 	 */
 	async updateApplicantStatus(id, status) {
 		console.log('Updating applicant status:', { id, status });
-		// Fix: gunakan applicationStatus field
+		
+		// If status is 'accepted', we need to add to register
+		if (status === 'accepted') {
+			try {
+				// Get applicant data first
+				const applicantData = await this.getApplicantById(id);
+				if (applicantData?.data) {
+					const applicant = applicantData.data;
+					
+					// Get job posting data
+					const { recruitmentService } = await import('./recruitmentService');
+					const jobData = await recruitmentService.getJobPostingById(applicant.appliedJobId);
+					
+					if (jobData?.data) {
+						// Import register service and create employee
+						const { registerService } = await import('./registerService');
+						
+						// Check if employee already exists
+						const existingEmployee = await registerService.checkExistingEmployee(
+							applicant.email, 
+							String(applicant.id)
+						);
+						
+						if (!existingEmployee) {
+							// Create new employee registration
+							await registerService.createEmployeeFromApplicant(applicant, jobData.data);
+							console.log('Successfully created employee registration for accepted applicant');
+						} else {
+							console.log('Employee already exists in register, skipping creation');
+						}
+					}
+				}
+			} catch (error) {
+				console.error('Error creating employee registration:', error);
+				// Don't throw error to prevent status update from failing
+			}
+		}
+		
+		// Update applicant status
 		return this.request(`/items/job_applications/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify({
@@ -125,16 +163,41 @@ class ApplicantService {
 	}
 
 	/**
-	 * Create a new job application
-	 * @param {object} applicationData - Application data
+	 * Create notification for new applicant
+	 * @param {string} applicantId - ID of the applicant
+	 * @param {string} jobId - ID of the job posting
+	 * @param {string} applicantName - Name of the applicant
+	 * @param {string} jobTitle - Title of the job
 	 */
-	async createApplication(applicationData) {
-		return this.request('/items/job_applications', {
-			method: 'POST',
-			body: JSON.stringify(applicationData)
-		});
-	}
+	async createNewApplicantNotification(applicantId, jobId, applicantName, jobTitle) {
+		try {
+			console.log('Creating notification for new applicant:', { applicantId, jobId, applicantName, jobTitle });
+			
+			// Create notification with schema that matches database
+			const notificationData = {
+				type: 'new_application',
+				message: `Pelamar baru "${applicantName}" telah mendaftar untuk posisi "${jobTitle}"`,
+				job_id: String(jobId),
+				applicant_id: String(applicantId),
+				redirect_url: `/recruitment/applications?jobId=${jobId}`,
+				is_read: false,
+				created_at: new Date().toISOString()
+			};
 
+			// Save notification to database
+			const result = await this.request('/items/hrd_notifications', {
+				method: 'POST',
+				body: JSON.stringify(notificationData)
+			});
+			
+			console.log('✅ Notification created successfully for new applicant:', result);
+			return result;
+		} catch (error) {
+			console.error('❌ Error creating notification for new applicant:', error);
+			// Don't throw error to prevent application creation from failing
+			return null;
+		}
+	}
 	/**
 	 * Upload a document (resume or supporting document)
 	 * @param {File} file - File to upload

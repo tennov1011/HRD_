@@ -70,7 +70,7 @@ class RecruitmentService {
 	 * Get all job postings
 	 */
 	async getAllJobPostings() {
-		return this.request('/items/job_postings?sort=-date_created&fields=*,applications.id');
+		return this.request('/items/job_postings?sort=-date_created&fields=*,applications.id&ts=' + Date.now());
 	}
 
 	/**
@@ -114,7 +114,6 @@ class RecruitmentService {
 	/**
 	 * Get job posting by ID
 	 * @param {number|string} id - Job posting ID
-	 * @param {object} jobData - Job posting data to update
 	 */
 	async getJobPostingById(id) {
 		return this.request(`/items/job_postings/${id}?fields=*,applications.id`);
@@ -158,6 +157,44 @@ class RecruitmentService {
 			method: 'DELETE'
 		});
 	}
+
+	/**
+	 * Automatically update expired job postings to inactive status
+	 * This should be called before retrieving job postings to ensure accurate status
+	 */
+	async updateExpiredJobsToInactive() {
+		try {
+			const now = new Date().toISOString();
+			
+			// Get all jobs that are active but have passed their deadline
+			const expiredJobsEndpoint = `/items/job_postings?filter[_and][0][deadline][_lte]=${now}&filter[_and][1][_or][0][status][_eq]=active&filter[_and][1][_or][1][status][_null]=true&fields=id,title,deadline,status`;
+			
+			const expiredJobsResponse = await this.request(expiredJobsEndpoint);
+			const expiredJobs = expiredJobsResponse?.data || [];
+			
+			if (expiredJobs.length > 0) {
+				console.log(`Found ${expiredJobs.length} expired jobs to update:`, expiredJobs.map(/** @param {{id: string, title: string, deadline: string}} job */ job => ({ id: job.id, title: job.title, deadline: job.deadline })));
+				
+				// Update each expired job to inactive status
+				const updatePromises = expiredJobs.map(/** @param {{id: string}} job */ job => 
+					this.request(`/items/job_postings/${job.id}`, {
+						method: 'PATCH',
+						body: JSON.stringify({ status: 'inactive' })
+					})
+				);
+				
+				await Promise.all(updatePromises);
+				console.log(`Successfully updated ${expiredJobs.length} expired jobs to inactive status`);
+			}
+			
+			return expiredJobs.length;
+		} catch (error) {
+			console.error('Error updating expired jobs:', error);
+			// Don't throw error to prevent breaking the main functionality
+			return 0;
+		}
+	}
+
 }
 
 export const recruitmentService = new RecruitmentService();

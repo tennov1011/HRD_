@@ -164,31 +164,6 @@
 						<span>Masuk ke Sistem</span>
 					{/if}
 				</button>
-
-				<!-- Demo Credentials -->
-				<div class="demo-credentials">
-					<div class="demo-header">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<circle cx="12" cy="12" r="10"></circle>
-							<path d="M12 6v6l4 2"></path>
-						</svg>
-						<span>Demo Accounts</span>
-					</div>
-					<div class="demo-list">
-						<div class="demo-item">
-							<strong>Admin:</strong>
-							<span>admin@eltama.com / admin123</span>
-						</div>
-						<div class="demo-item">
-							<strong>HRD:</strong>
-							<span>michael@eltama.com / michael123</span>
-						</div>
-						<div class="demo-item">
-							<strong>Finance:</strong>
-							<span>sarah@eltama.com / sarah123</span>
-						</div>
-					</div>
-				</div>
 			</form>
 		</div>
 

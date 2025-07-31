@@ -161,74 +161,39 @@ export const actions = {
         try {
             const applicantId = params.id;
             
-            // Prepare update data with explicit typing
-            /** @type {Record<string, any>} */
-            const updateData = {};
-            
-            if (status) {
-                updateData.applicationStatus = status;
-            }
-            
-            // Add note field - try the correct field name
-            if (note && typeof note === 'string' && note.trim()) {
-                const noteValue = note.trim();
-                // Just use one field name at a time to see which one works
-                updateData.note = noteValue; // Most common field name
-            }
-            
-            console.log('Update data being sent:', JSON.stringify(updateData, null, 2));
-            
-            // Use the service method instead of direct fetch
-            try {
-                const endpoint = `/items/job_applications/${applicantId}`;
-                const response = await applicantService.request(endpoint, {
-                    method: 'PATCH',
-                    body: JSON.stringify(updateData)
+            if (!status) {
+                return fail(400, {
+                    error: true,
+                    message: 'Status is required'
                 });
-                
-                console.log('Service response:', response);
-                
-                return {
-                    success: true,
-                    message: 'Status kandidat berhasil diperbarui',
-                    updatedStatus: status,
-                    updatedNote: note
-                };
-            } catch (serviceError) {
-                console.error('Service error, trying direct fetch:', serviceError);
-                
-                // Fallback to direct fetch
-                const endpoint = `/items/job_applications/${applicantId}`;
-                const url = `${applicantService.baseURL}${endpoint}`;
-                const config = {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${applicantService.token}`
-                    },
-                    body: JSON.stringify(updateData)
-                };
-
-                const response = await fetch(url, config);
-                
-                console.log('Direct fetch response status:', response.status);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('API Error response:', errorText);
-                    throw new Error(`HTTP error ${response.status}: ${errorText}`);
-                }
-                
-                const responseData = await response.json();
-                console.log('API Response data:', responseData);
-                
-                return {
-                    success: true,
-                    message: 'Status kandidat berhasil diperbarui',
-                    updatedStatus: status,
-                    updatedNote: note
-                };
             }
+            
+            // Convert frontend status values to database status values
+            const statusMap = {
+                'diproses': 'reviewed',
+                'interview': 'interview',
+                'lolos': 'accepted',
+                'ditolak': 'rejected'
+            };
+            
+            // @ts-ignore - Ignore TypeScript checking for statusMap access
+            const dbStatus = statusMap[String(status)] || String(status);
+            
+            // Use the enhanced applicantService.updateApplicantStatus method
+            await applicantService.updateApplicantStatus(String(applicantId), dbStatus);
+            
+            // Create success message with special notice for accepted status
+            let message = 'Status kandidat berhasil diperbarui';
+            if (dbStatus === 'accepted') {
+                message = 'Status kandidat berhasil diperbarui menjadi LOLOS! Data karyawan telah otomatis dibuat dalam sistem register.';
+            }
+            
+            return {
+                success: true,
+                message: message,
+                updatedStatus: status,
+                updatedNote: note
+            };
         } catch (err) {
             console.error('Error updating applicant status:', err);
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';

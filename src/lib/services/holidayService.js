@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import Holidays from 'date-holidays';
 
 // Get Directus configuration from environment
 const DIRECTUS_URL = import.meta.env.VITE_DIRECTUS_URL;
@@ -10,6 +11,9 @@ const DIRECTUS_TOKEN = import.meta.env.VITE_DIRECTUS_TOKEN;
 export class HolidayService {
 	/**
 	 * Make authenticated request to Directus
+	 * @param {string} endpoint API endpoint
+	 * @param {object} options Request options
+	 * @returns {Promise<any>} Response data
 	 */
 	static async request(endpoint, options = {}) {
 		if (!browser) return null;
@@ -19,7 +23,7 @@ export class HolidayService {
 			headers: {
 				'Content-Type': 'application/json',
 				...(DIRECTUS_TOKEN && { Authorization: `Bearer ${DIRECTUS_TOKEN}` }),
-				...options.headers
+				...(options.headers || {})
 			},
 			...options
 		};
@@ -55,6 +59,8 @@ export class HolidayService {
 
 	/**
 	 * Build query string from parameters
+	 * @param {object} params Query parameters
+	 * @returns {string} Query string
 	 */
 	static buildQueryString(params) {
 		const queryParams = new URLSearchParams();
@@ -259,5 +265,128 @@ export class HolidayService {
 		const types = this.getHolidayTypes();
 		const found = types.find((t) => t.value === type);
 		return found ? found.color : 'holiday-default';
+	}
+
+	/**
+	 * Get Indonesian national holidays for a specific year
+	 * @param {number} year - Year to get holidays for
+	 * @returns {Array} Array of Indonesian national holidays
+	 */
+	static getIndonesianHolidays(year) {
+		try {
+			const hd = new Holidays('ID');
+			const holidays = hd.getHolidays(year);
+			
+			// Map to store unique holidays by date
+			const uniqueHolidays = new Map();
+			
+			holidays.forEach(holiday => {
+				let dateStr = '';
+				
+				// Handle different date formats
+				if (holiday.date instanceof Date) {
+					// Use local timezone to avoid date shifting
+					const year = holiday.date.getFullYear();
+					const month = String(holiday.date.getMonth() + 1).padStart(2, '0');
+					const day = String(holiday.date.getDate()).padStart(2, '0');
+					dateStr = `${year}-${month}-${day}`;
+				} else if (typeof holiday.date === 'string') {
+					// If it's a string, try to parse and format it using local timezone
+					const parsedDate = new Date(holiday.date);
+					if (!isNaN(parsedDate.getTime())) {
+						const year = parsedDate.getFullYear();
+						const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+						const day = String(parsedDate.getDate()).padStart(2, '0');
+						dateStr = `${year}-${month}-${day}`;
+					} else {
+						dateStr = holiday.date.split(' ')[0]; // Take just the date part
+					}
+				} else {
+					// Fallback to string conversion
+					dateStr = String(holiday.date).split(' ')[0];
+				}
+				
+				// Skip if date is invalid
+				if (!dateStr || dateStr === 'Invalid Date' || dateStr === 'undefined') {
+					return;
+				}
+				
+				// Create holiday object
+				const holidayObj = {
+					name: holiday.name,
+					date: dateStr,
+					description: holiday.type || 'Hari Libur Nasional',
+					type: 'public',
+					year: year,
+					source: 'national'
+				};
+				
+				// Only add if not already exists for this date, or if this one has a more specific name
+				if (!uniqueHolidays.has(dateStr)) {
+					uniqueHolidays.set(dateStr, holidayObj);
+				} else {
+					// Keep the one with longer/more specific name
+					const existing = uniqueHolidays.get(dateStr);
+					if (holiday.name.length > existing.name.length) {
+						uniqueHolidays.set(dateStr, holidayObj);
+					}
+				}
+			});
+			
+			// Convert Map to Array and sort by date
+			return Array.from(uniqueHolidays.values()).sort((a, b) => 
+				new Date(a.date).getTime() - new Date(b.date).getTime()
+			);
+		} catch (error) {
+			console.error('Error getting Indonesian holidays:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * Import Indonesian national holidays to database
+	 * @param {number} year - Year to import holidays for
+	 * @returns {Promise<Object>} Import result
+	 */
+	static async importIndonesianHolidays(year) {
+		try {
+			const nationalHolidays = this.getIndonesianHolidays(year);
+			const results = [];
+			let imported = 0;
+			let skipped = 0;
+
+			for (const holiday of nationalHolidays) {
+				// Check if holiday already exists
+				const existing = await this.getHolidayByDate(holiday.date);
+				
+				if (!existing || !existing.data || existing.data.length === 0) {
+					try {
+						await this.createHoliday(holiday);
+						results.push({ holiday: holiday.name, status: 'imported' });
+						imported++;
+					} catch (error) {
+						console.error(`Error importing holiday ${holiday.name}:`, error);
+						results.push({ holiday: holiday.name, status: 'error', error: error.message });
+					}
+				} else {
+					results.push({ holiday: holiday.name, status: 'skipped' });
+					skipped++;
+				}
+			}
+
+			return {
+				success: true,
+				total: nationalHolidays.length,
+				imported,
+				skipped,
+				results
+			};
+		} catch (error) {
+			console.error('Error importing Indonesian holidays:', error);
+			return {
+				success: false,
+				error: error.message
+			};
+		}
 	}
 }

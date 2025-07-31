@@ -36,7 +36,7 @@
 </script>
 
 <svelte:head>
-	<title>Add Job Posting</title>
+	<title>Tambah Lowongan</title>
 </svelte:head>
 
 <div class="container mx-auto px-4 py-8">
@@ -103,7 +103,7 @@
 						required
 						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
 					>
-						<option value="" disabled>Pilih lokasi absen</option>
+						<option value="" disabled>Pilih lokasi lowongan</option>
 						{#each data.masterData?.lokasi_absen ?? [] as lokasi}
 							<option value={lokasi.value}>{lokasi.value} | {lokasi.alamat}</option>
 						{/each}
@@ -127,7 +127,7 @@
 				</div>
 
 				<div>
-					<label for="employment_type" class="mb-1 block text-sm font-medium text-gray-700">Tipe Pekerjaan *</label>
+					<label for="employment_type" class="mb-1 block text-sm font-medium text-gray-700">Status Waktu Kerja *</label>
 					<select
 						id="employment_type"
 						name="employment_type"
@@ -135,7 +135,7 @@
 						required
 						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
 					>
-						<option value="" disabled>Pilih tipe pekerjaan</option>
+						<option value="" disabled>Pilih status waktu kerja</option>
 						<option value="full-time">Full Time</option>
 						<option value="part-time">Part Time</option>
 						<option value="contract">Kontrak</option>
@@ -153,7 +153,7 @@
 						required
 						class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:outline-none sm:text-sm"
 					>
-						<option value="" disabled>Pilih pendidikan minimal</option>
+						<option value="" disabled>Pendidikan minimal</option>
 						<option value="sma">SMA/SMK</option>
 						<option value="diploma">Diploma (D3)</option>
 						<option value="sarjana">Sarjana (S1)</option>

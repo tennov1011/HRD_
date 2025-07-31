@@ -6,6 +6,9 @@ import { applicantService } from '$lib/services/applicantService';
 /** @type {import('../$types').PageServerLoad} */
 export async function load() {
     try {
+        // First, update any expired jobs to inactive status
+        await recruitmentService.updateExpiredJobsToInactive();
+        
         // Get all job postings 
         const jobPostings = await recruitmentService.getAllJobPostings();
         
